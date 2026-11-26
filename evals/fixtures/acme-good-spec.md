@@ -31,6 +31,11 @@ Today 34% of quotes go out within 2 hours (illustrative, from the quoting events
 - Runs in CI on every prompt change or model change, and before each rollout stage.
 - Owner of the eval set: Tomas Reyes, Staff Engineer.
 
+## Guardrails
+
+- Guardrail: quote edits after send stay under 5% of quotes.
+- Guardrail: support tickets about quotes do not rise more than 10% on the Q3 level.
+
 ## Rollout
 
 - Stage 1: internal staff accounts behind the `quote_drafts` feature flag, two weeks.
@@ -46,3 +51,4 @@ Today 34% of quotes go out within 2 hours (illustrative, from the quoting events
 ## Open questions
 
 - Should drafts for jobs over $10,000 need a second review? Owner: Maya Okafor, answer by 2026-12-15.
+- Riskiest assumption: tradespeople will send a draft after light edits. Test: the internal stage measures how many draft lines are kept, before the pilot starts.

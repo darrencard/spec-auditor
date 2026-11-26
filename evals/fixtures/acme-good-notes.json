@@ -1,0 +1,12 @@
+[
+  {
+    "line": 30,
+    "quote": "0 drafts include a price the price book does not hold",
+    "note": "The eval holds the model to 0 invented prices, which matches the line in the brief: pricing stays in fixed code."
+  },
+  {
+    "line": 47,
+    "quote": "draft line-item acceptance below 70% for 3 days",
+    "note": "The rollback trigger is set on acceptance in production, not on the eval set, so a drop shows after launch as well as before it."
+  }
+]

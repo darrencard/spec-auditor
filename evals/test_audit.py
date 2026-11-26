@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "spec-auditor" / "scripts"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import landing_brief  # noqa: E402
 import spec_audit as sa  # noqa: E402
@@ -87,7 +88,7 @@ class Fixtures(unittest.TestCase):
         report = sa.audit(sa.load(GOOD), AS_OF)
         self.assertEqual(report["verdict"], "pass")
         self.assertTrue(report["ai_feature"])
-        self.assertEqual(report["counts"], {"hold": 0, "note": 0, "pass": 12})
+        self.assertEqual(report["counts"], {"hold": 0, "note": 0, "pass": 16})
 
     def test_good_spec_cites_the_lines_it_relies_on(self):
         doc = sa.load(GOOD)
@@ -109,6 +110,8 @@ class Fixtures(unittest.TestCase):
         self.assertEqual(held, {"brief", "problem", "good", "non-goals", "cost", "owner", "rollout", "rollback", "eval-plan", "placeholders"})
         self.assertEqual(results(report)["certainty"], "note")
         self.assertEqual(results(report)["instructions"], "note")
+        self.assertEqual(results(report)["guardrail"], "note")
+        self.assertEqual(results(report)["baseline"], "note")
 
     def test_weak_spec_line_numbers_point_at_the_problem(self):
         doc = sa.load(WEAK)
@@ -197,6 +200,33 @@ class Checks(unittest.TestCase):
         for line, want in cases.items():
             self.assertEqual(finding(run(f"# Spec\n\n## Rollback\n\n{line}\n"), "rollback")["result"], want, line)
 
+    def test_stage_label_is_not_a_rollback_trigger(self):
+        text = "# Spec\n\n## Rollback\n\nIn stage 2, turn off the flag.\n"
+        self.assertEqual(finding(run(text), "rollback")["result"], "hold")
+        text = "# Spec\n\n## Rollback\n\nIf acceptance drops below 70, turn off the flag.\n"
+        self.assertEqual(finding(run(text), "rollback")["result"], "pass")
+
+    def test_output_metric_holds_and_activity_metric_is_a_note(self):
+        for metric, want in (("Features shipped", "hold"), ("Pull requests merged", "hold"), ("Drafts generated", "note"), ("Invoices paid by the due date", "pass")):
+            report = run(BRIEF.replace("Invoices paid by the due date", metric) + EVAL + ROLLOUT)
+            self.assertEqual(finding(report, "outcome")["result"], want, metric)
+
+    def test_guardrail_needs_a_limit(self):
+        self.assertEqual(finding(run("# Spec\n\nGuardrail: refund requests\n"), "guardrail")["result"], "note")
+        self.assertEqual(finding(run("# Spec\n\nGuardrail: refund requests stay under 1%.\n"), "guardrail")["result"], "pass")
+        self.assertEqual(finding(run("# Spec\n\n## Guardrails\n\n- Churn stays under 2% a month.\n"), "guardrail")["result"], "pass")
+
+    def test_baseline_and_assumptions_are_notes_only(self):
+        report = run(BRIEF + EVAL + ROLLOUT)
+        self.assertEqual(finding(report, "baseline")["result"], "note")
+        self.assertEqual(finding(report, "assumptions")["result"], "note")
+        self.assertEqual(report["verdict"], "pass")
+        report = run(BRIEF + EVAL + ROLLOUT + "\nToday 55% are paid by the due date.\n\n## Risks\n\n- Customers may mark chasers as spam.\n")
+        self.assertEqual(finding(report, "baseline")["result"], "pass")
+        self.assertEqual(finding(report, "assumptions")["result"], "note")
+        report = run(BRIEF + EVAL + ROLLOUT + "\n## Risks\n\n- Customers may mark chasers as spam. Test: a 2-week pilot measures spam reports.\n")
+        self.assertEqual(finding(report, "assumptions")["result"], "pass")
+
     def test_eval_plan_needs_cases_bar_and_when(self):
         f = finding(run("# Spec\n\nUses a prompt.\n\n## Eval plan\n\nWe will test it on 200 cases.\n"), "eval-plan")
         self.assertEqual(f["result"], "hold")
@@ -244,6 +274,17 @@ class Quotes(unittest.TestCase):
         self.assertFalse(row["ok"])
         self.assertIn("85", row["why"])
 
+    def test_example_notes_file_is_accepted(self):
+        notes = json.loads((FIXTURES / "acme-good-notes.json").read_text(encoding="utf-8"))
+        self.assertEqual([r["ok"] for r in sa.check_quotes(self.doc, notes)], [True, True])
+
+    def test_model_arithmetic_in_a_note_is_rejected(self):
+        # 20 is 90 minus 70: a figure the model worked out, which the quote does not hold.
+        note = {"line": 47, "quote": "draft line-item acceptance below 70% for 3 days", "note": "The trigger sits 20 points under the eval pass bar."}
+        row = sa.check_quotes(self.doc, [note])[0]
+        self.assertFalse(row["ok"])
+        self.assertIn("20", row["why"])
+
     def test_bad_shapes_are_rejected(self):
         rows = sa.check_quotes(self.doc, ["text", {"line": 0, "quote": "x"}, {"line": True, "quote": "Bar"}, {"line": 9, "quote": ""}])
         self.assertEqual([r["ok"] for r in rows], [False, False, False, False])
@@ -259,7 +300,7 @@ class Output(unittest.TestCase):
 
     def test_text_report_ends_with_verdict(self):
         out = sa.render_text(sa.audit(sa.load(WEAK), AS_OF))
-        self.assertTrue(out.strip().endswith("(10 hold, 2 note, 0 pass)"), out)
+        self.assertTrue(out.strip().endswith("(10 hold, 5 note, 1 pass)"), out)
 
     def test_cli_json_and_quotes_exit_codes(self):
         script = str(SCRIPTS / "spec_audit.py")
@@ -270,6 +311,16 @@ class Output(unittest.TestCase):
             notes.write_text(json.dumps([{"line": 30, "quote": "Pass bar: 91%", "note": ""}]), encoding="utf-8")
             bad = subprocess.run([sys.executable, script, "quotes", str(GOOD), str(notes)], capture_output=True, text=True)  # noqa: S603
             self.assertEqual(bad.returncode, 1)
+        held = subprocess.run([sys.executable, script, "audit", str(WEAK), "--fail-on-hold"], capture_output=True, text=True)  # noqa: S603
+        self.assertEqual(held.returncode, 2)
+        passed = subprocess.run([sys.executable, script, "audit", str(GOOD), "--fail-on-hold"], capture_output=True, text=True)  # noqa: S603
+        self.assertEqual(passed.returncode, 0)
+
+    def test_html_fixture_is_up_to_date(self):
+        import make_html_fixture
+
+        want = make_html_fixture.convert(GOOD.read_text(encoding="utf-8"))
+        self.assertEqual(GOOD_HTML.read_text(encoding="utf-8"), want, "Run python3 evals/make_html_fixture.py")
 
     def test_text_command_numbers_every_line(self):
         buf = io.StringIO()

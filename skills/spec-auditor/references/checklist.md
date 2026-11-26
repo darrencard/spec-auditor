@@ -53,9 +53,13 @@ Passes with a named person in `Decides the next step`, `Owner`, `DRI` or `Accoun
 
 Passes with a Rollout, Launch or Release section that names a stage: a percentage, a flag, a cohort, a pilot, internal or staff accounts. Holds on "Launch to all customers in January."
 
+## outcome
+
+Holds when the brief's metric counts work shipped: features, releases, launches, pull requests, story points, velocity. A bar of "12 features shipped" is met the day they ship, whether or not anything changed for the customer. A bar on use (drafts generated, clicks, active users, adoption) is a note: fine as a leading signal, weak as the bar. "Quotes sent within 2 hours of the visit" passes.
+
 ## rollback
 
-Passes when a Rollback section, or any line about rolling back, has a trigger with a number and a way back. "If draft acceptance is below 70% for 3 days, turn off the flag" passes. "If there are issues we will roll back" holds.
+Passes when a Rollback section, or any line about rolling back, has a trigger threshold and a way back. A threshold is a number with a unit or a comparison ("below 70%", "for 3 days", "more than 5 complaints"); "in stage 2" is not one. "If draft acceptance is below 70% for 3 days, turn off the flag" passes. "If there are issues we will roll back" holds.
 
 ## eval-plan
 
@@ -64,6 +68,18 @@ Only for an AI feature. Passes with an Eval plan or Evaluation section holding a
 ## placeholders
 
 Holds on any line with TBD, TBC, TBA, TODO, FIXME, ???, [insert ...] or XX%. Every line is listed.
+
+## guardrail (note)
+
+Flags when no guardrail metric with a limit is named, as a `Guardrail:` line or a Guardrails section outside the landing brief. "Guardrail: quote edits after send stay under 5% of quotes" passes. Without one, the bar can be met by making something else worse.
+
+## baseline (note)
+
+Flags when the metric's current value is not stated ("Today 34% of quotes go out within 2 hours"). Without it, no one can say how far the bar is from today.
+
+## assumptions (note)
+
+Flags when there is no Risks, Assumptions or Open questions section with at least one line. Name the riskiest assumption and how it will be tested.
 
 ## certainty (note)
 

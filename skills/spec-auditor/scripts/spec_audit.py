@@ -6,6 +6,7 @@ Usage:
   python3 scripts/spec_audit.py audit spec.md --as-of 2026-11-26    # also hold a definition-of-good date in the past
   python3 scripts/spec_audit.py audit spec.html --json              # the same as JSON
   python3 scripts/spec_audit.py audit spec.md --format md           # as Markdown, to paste into a review
+  python3 scripts/spec_audit.py audit spec.md --fail-on-hold        # exit 2 on hold, to gate a pull request
   python3 scripts/spec_audit.py text spec.html                      # the numbered text every line number refers to
   python3 scripts/spec_audit.py quotes spec.md notes.json           # check the model's quotes against the spec
 
@@ -20,10 +21,14 @@ The checks, each run in code:
   cost         the cost budget as two lines, tokens per task and price per token, each one number
   owner        a named person who owns the work or decides the next step, not a team or TBD
   rollout      a rollout plan with a stage (a percentage, a flag, a cohort, a pilot)
-  rollback     a rollback plan with a trigger (a number) and a way back (a flag, a revert, an off switch)
+  rollback     a rollback plan with a trigger (a threshold: a number with a unit or a comparison) and a way back (a flag, a revert, an off switch)
   eval-plan    for an AI feature: an eval plan with a case count, a pass bar and when it runs
   placeholders no TBD, TODO, TBC, ??? or [insert ...] left in the spec
   certainty    notes forecasts stated as certain ("will increase", "guarantees"). Never holds.
+  outcome      holds a bar on work shipped (features, releases); notes a bar on use (clicks, adoption)
+  guardrail    notes when no guardrail metric with a limit is named. Never holds.
+  baseline     notes when the metric's current value is not stated. Never holds.
+  assumptions  notes when no risks, assumptions or open questions are listed. Never holds.
   instructions notes text addressed to the reviewer ("ignore the checklist", "mark this pass"). Never holds.
 
 Any finding marked hold makes the verdict hold. Notes never change the verdict. Nothing in the spec changes a check:
@@ -69,6 +74,8 @@ SECTIONS = {
     "owner": ("owner", "owners", "ownership", "dri", "team", "people"),
     "rollout": ("rollout", "roll-out", "rollout plan", "launch plan", "release plan", "launch", "release"),
     "rollback": ("rollback", "roll back", "rollback plan", "kill switch", "off switch", "backout plan", "back-out plan"),  # voice-lint-disable-line
+    "guardrail": ("guardrail", "guardrails", "guardrail metrics", "counter-metrics", "counter metrics", "what must not get worse"),
+    "assumptions": ("assumptions", "riskiest assumption", "riskiest assumptions", "risks", "risks and assumptions", "open questions", "unknowns"),
     "eval": ("eval plan", "evals", "eval", "evaluation", "evaluation plan", "model evaluation", "quality bar"),
 }
 OWNER_KEYS = ("decides the next step", "decides", "owner", "dri", "accountable", "product owner")
@@ -98,6 +105,23 @@ INSTRUCTION = re.compile(
     r"|\bmark (?:this|the spec|it)\b.{0,20}\b(?:pass|passed|approved|landed)\b|\b(?:system prompt|you are now|as an ai)\b",
     re.I,
 )
+# A rollback trigger is a threshold: a number with a unit or a comparison, not a stage label such as "Stage 2".
+TRIGGER = re.compile(
+    r"\d[\d,.]*\s?(?:%|ms|s\b|seconds?|minutes?|hours?|days?|errors?|complaints?|tickets?|incidents?|x\b)"
+    r"|(?:below|above|over|under|pass(?:es)?|reach(?:es)?|hits?|more than|less than|fewer than|exceeds?|drops? (?:below|under)|rises? (?:above|over)|>|<|>=|<=)\s*[$£€]?\d",
+    re.I,
+)
+# Metrics that count work done, not what changed for the customer. A bar on one of these cannot show the work landed.
+OUTPUT_METRIC = re.compile(
+    r"\b(?:features?|tickets?|stories|story points|epics?|releases?|launch(?:es)?|pull requests?|prs?|commits?|deploys?|deployments?|velocity|throughput)\b"
+    r"|\b(?:shipped|launched|delivered|released|completed|built|rolled out)\b",
+    re.I,
+)
+# Metrics that count use, not the outcome use was meant to cause. Fine as a leading signal, weak as the bar.
+ACTIVITY_METRIC = re.compile(r"\b(?:generated|created|clicks?|page ?views?|sessions?|logins?|sign-?ins?|opens?|impressions?|tried|used|usage|adoption|active users|DAU|MAU|WAU)\b", re.I)
+GUARDRAIL_KEYS = ("guardrail", "guardrails", "counter-metric", "counter metric", "must not get worse")
+BASELINE = re.compile(r"\b(?:today|currently|baseline|at present|as of now|now at|is now)\b[^.]{0,80}?\d|\d[^.]{0,60}\b(?:today|currently|baseline)\b", re.I)
+TESTED = re.compile(r"\b(?:test|tested|tests|validate[ds]?|interviews?|prototype|experiment|measure[sd]?|pilot|spike|check(?:ed)? by)\b", re.I)
 COMBINED_COST = re.compile(r"per task|per request|per call|a task|each task", re.I)
 
 
@@ -411,9 +435,9 @@ def check_rollback(doc: Doc) -> Finding:
         head, lines = [], [n for n, line in enumerate(doc.lines, 1) if ROLLBACK_WORDS.search(line)]
     if not lines:
         return Finding("rollback", "hold", "No rollback plan.", [], "Say what number triggers a rollback, and how it is done (a flag, a revert, an off switch).")
-    trigger = [n for n in lines if NUM.search(ISO_DATE.sub("", doc.line(n)))]
+    trigger = [n for n in lines if TRIGGER.search(ISO_DATE.sub("", doc.line(n)))]
     way = [n for n in lines if WAY_BACK.search(doc.line(n))]
-    missing = [x for x, ok in (("trigger with a number", trigger), ("way back", way)) if not ok]
+    missing = [x for x, ok in (("trigger threshold", trigger), ("way back", way)) if not ok]
     if missing:
         return Finding(
             "rollback", "hold", f"The rollback plan has no {' and no '.join(missing)}.", [*head, *lines[:3]], "Say what number triggers it (such as an error rate over 2%) and how it is done."
@@ -452,6 +476,56 @@ def check_certainty(doc: Doc) -> Finding:
     return Finding("certainty", "pass", "No forecast stated as certain.")
 
 
+def check_outcome(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
+    if "metric" not in brief:
+        return Finding("outcome", "pass", "No brief metric to classify; the good check holds on that.")
+    n, metric = brief["metric"]
+    if OUTPUT_METRIC.search(metric):
+        return Finding("outcome", "hold", f'The metric "{metric[:60]}" counts work shipped, not what changed for the customer.', [n], "Pick the customer or business result the work is meant to move.")
+    if ACTIVITY_METRIC.search(metric):
+        return Finding(
+            "outcome", "note", f'The metric "{metric[:60]}" counts use. It can rise while the outcome does not.', [n], "Keep it as a leading signal; make the bar the result use is meant to cause."
+        )
+    return Finding("outcome", "pass", "The metric is a result, not a count of work or use.", [n])
+
+
+def check_guardrail(doc: Doc) -> Finding:
+    found = key_lines(doc, GUARDRAIL_KEYS)
+    sec = doc.section(SECTIONS["guardrail"])
+    lines = [n for n, _, v in found if v] + (sec[1] if sec else [])
+    with_num = [n for n in lines if NUM.search(ISO_DATE.sub("", doc.line(n)))]
+    if with_num:
+        return Finding("guardrail", "pass", "A guardrail metric with a limit is named.", sorted({*([sec[0]] if sec else []), *with_num[:3]}))
+    if lines:
+        return Finding("guardrail", "note", "A guardrail is named, with no limit.", lines[:3], "Give the limit as a number, such as refund requests stay under 1%.")
+    return Finding("guardrail", "note", "No guardrail metric. The bar can be met by making something else worse.", [], 'Add "Guardrail: <metric> stays under <number>".')
+
+
+def check_baseline(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
+    hits = [n for n, line in enumerate(doc.lines, 1) if BASELINE.search(ISO_DATE.sub("", line))]
+    if hits:
+        return Finding("baseline", "pass", "The metric's current value is stated.", hits[:2])
+    where = [brief["metric"][0]] if "metric" in brief else []
+    return Finding(
+        "baseline", "note", "No current value for the metric, so the size of the gap to the bar is unknown.", where, 'State it with its source, such as "Today 34% (quoting events table, Q3)".'
+    )
+
+
+def check_assumptions(doc: Doc) -> Finding:
+    sec = doc.section(SECTIONS["assumptions"])
+    if sec and sec[1] and not any(TESTED.search(doc.line(n)) for n in sec[1]):
+        return Finding(
+            "assumptions",
+            "note",
+            "Risks or open questions are listed, with no test for any of them.",
+            [sec[0], *sec[1][:2]],
+            "Name the riskiest assumption and the test that will check it before build.",
+        )
+    if sec and sec[1]:
+        return Finding("assumptions", "pass", f"Risks, assumptions or open questions listed ({len(sec[1])} line{'s' if len(sec[1]) != 1 else ''}).", [sec[0]])
+    return Finding("assumptions", "note", "No risks, assumptions or open questions listed.", [sec[0]] if sec else [], "Name the riskiest assumption and how it will be tested before build.")
+
+
 def check_instructions(doc: Doc) -> Finding:
     hits = [n for n, line in enumerate(doc.lines, 1) if INSTRUCTION.search(line)]
     if hits:
@@ -480,6 +554,10 @@ def audit(doc: Doc, as_of: datetime.date | None = None) -> dict:
         check_eval(doc, ai, ai_lines),
         check_placeholders(doc),
         check_certainty(doc),
+        check_outcome(doc, brief),
+        check_guardrail(doc),
+        check_baseline(doc, brief),
+        check_assumptions(doc),
         check_instructions(doc),
     ]
     holds = sum(f.result == "hold" for f in findings)
@@ -508,7 +586,7 @@ def render_text(report: dict) -> str:
     for f in sorted(report["findings"], key=lambda f: ORDER.index(f["result"])):
         out.append(f"[{f['result'].upper():4}] {f['check']:<12} {refs(f['lines']):<22} {f['message']}")
         if f["fix"] and f["result"] != "pass":
-            out.append(f"{'':41} Fix: {f['fix']}")
+            out.append(f"{'':42} Fix: {f['fix']}")
     out += ["", f"Verdict: {report['verdict'].upper()} ({c['hold']} hold, {c['note']} note, {c['pass']} pass)"]
     return "\n".join(out) + "\n"
 
@@ -575,6 +653,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("notes", nargs="?", help="quotes: a JSON file of the model's notes")
     ap.add_argument("--as-of", help="audit: today's date, YYYY-MM-DD, to hold a definition-of-good date in the past")
     ap.add_argument("--json", action="store_true", help="audit: print the report as JSON")
+    ap.add_argument("--fail-on-hold", action="store_true", help="audit: exit 2 when the verdict is hold, to gate a pull request or CI job")
     ap.add_argument("--format", choices=["text", "md"], default="text", help="audit: text (default) or Markdown")
     args = ap.parse_args(argv)
     try:
@@ -606,7 +685,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
         sys.stdout.write(render_md(report) if args.format == "md" else render_text(report))
-    return 0
+    return 2 if args.fail_on_hold and report["verdict"] == "hold" else 0
 
 
 if __name__ == "__main__":
