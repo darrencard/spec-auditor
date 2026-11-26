@@ -151,6 +151,7 @@ class Finding:
     message: str
     lines: list[int] = field(default_factory=list)
     fix: str = ""
+    file: str = "spec"  # which file the lines are in: "spec", or "brief" when --brief names a separate brief
 
 
 @dataclass
@@ -329,15 +330,17 @@ def check_date(parsed: landing_brief.Brief, fields: dict[str, tuple[int, str]], 
     return Finding("date", "pass", f"The brief's date, {parsed.by}, is still ahead." if as_of else f"The brief's date is {parsed.by}; pass --as-of to check it is ahead.", lines)
 
 
-def check_owner(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
+def check_owner(doc: Doc, brief: dict[str, tuple[int, str]], brief_file: str = "spec") -> Finding:
     candidates = [brief["decides"]] if "decides" in brief else []
     candidates += [(n, v) for n, _, v in key_lines(doc, OWNER_KEYS) if (n, v) not in candidates]
     named = [(n, v) for n, v in candidates if v.split(",")[0].strip().strip(".").lower() not in PLACEHOLDER_OWNERS and not PLACEHOLDER.search(v)]
     if named:
         n, v = named[0]
-        return Finding("owner", "pass", f"Owner named: {v[:60]}.", [n])
+        return Finding("owner", "pass", f"Owner named: {v[:60]}.", [n], file=brief_file if "decides" in brief and brief["decides"] == (n, v) else "spec")
     if candidates:
-        return Finding("owner", "hold", f'The owner is "{candidates[0][1][:40]}", not a named person.', [n for n, _ in candidates][:3], "Name one person who decides the next step.")
+        first = candidates[0]
+        where = brief_file if "decides" in brief and brief["decides"] == first else "spec"
+        return Finding("owner", "hold", f'The owner is "{first[1][:40]}", not a named person.', [first[0]], "Name one person who decides the next step.", file=where)
     sec = doc.section(SECTIONS["owner"])
     return Finding("owner", "hold", "No named owner.", [sec[0]] if sec else [], 'Add "Decides the next step: <name>, <role>" to the landing brief.')
 
@@ -426,11 +429,11 @@ def check_guardrail(doc: Doc) -> Finding:
     return Finding("guardrail", "note", "No guardrail metric. The bar can be met by making something else worse.", [], 'Add "Guardrail: <metric> stays under <number>".')
 
 
-def check_baseline(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
+def check_baseline(doc: Doc, brief: dict[str, tuple[int, str]], separate: bool = False) -> Finding:
     hits = [n for n, line in enumerate(doc.lines, 1) if BASELINE.search(ISO_DATE.sub("", line))]
     if hits:
         return Finding("baseline", "pass", "The metric's current value is stated.", hits[:2])
-    where = [brief["metric"][0]] if "metric" in brief else []
+    where = [brief["metric"][0]] if "metric" in brief and not separate else []
     return Finding(
         "baseline", "note", "No current value for the metric, so the size of the gap to the bar is unknown.", where, 'State it with its source, such as "Today 34% (quoting events table, Q3)".'
     )
@@ -464,23 +467,69 @@ def check_instructions(doc: Doc) -> Finding:
     return Finding("instructions", "pass", "No text addressed to the reviewer.")
 
 
-def audit(doc: Doc, as_of: datetime.date | None = None) -> dict:
-    start, brief = brief_fields(doc)
+def check_brief_match(doc: Doc, parsed: landing_brief.Brief | None) -> Finding | None:
+    """With a separate brief, a copy of the brief inside the spec must say the same thing. Compared through the parser."""
+    start, fields = brief_fields(doc)
+    if start is None:
+        return None
     try:
-        parsed = landing_brief.parse("\n".join(doc.lines)) if start else None
+        copy = landing_brief.parse("\n".join(doc.lines))
+    except landing_brief.BriefError:
+        return Finding("brief-match", "hold", "The spec's own copy of the landing brief does not parse.", [start], "Delete the copy and link the brief, or copy it again.")
+    if parsed is None or copy == parsed:
+        return Finding("brief-match", "pass", "The spec's copy of the landing brief matches the brief.", [start])
+    differ = [key for attr, key in BRIEF_PARTS.items() if getattr(copy, attr) != getattr(parsed, attr)]
+    differ = list(dict.fromkeys(differ))
+    names = ", ".join(k.replace("_", " ") for k in differ)
+    rows = [fields[k][0] for k in differ if k in fields]
+    return Finding(
+        "brief-match", "hold", f"The spec's copy of the landing brief differs from the brief on: {names}.", rows[:4] or [start], "Copy the brief again; change the brief itself if the plan changed."
+    )
+
+
+# Each part of the parsed brief, and the brief key it is written under.
+BRIEF_PARTS = {
+    "problem": "problem",
+    "metric": "metric",
+    "bar_text": "bar",
+    "higher_is_better": "better",
+    "by": "by",
+    "non_goals": "non_goals",
+    "tokens_per_task": "tokens_per_task",
+    "price_per_token": "price_per_token",
+    "line": "line",
+    "line_note": "line",
+    "decides": "decides",
+}
+
+
+def audit(doc: Doc, as_of: datetime.date | None = None, brief_doc: Doc | None = None) -> dict:
+    """Audit the spec. With brief_doc (a separate brief file, as the Landing Loop keeps it), the brief checks read that file and
+    cite its lines with file "brief"; the spec's own copy of the brief, if it has one, must match."""
+    bdoc = brief_doc or doc
+    bfile = "brief" if brief_doc is not None else "spec"
+    start, brief = brief_fields(bdoc)
+    try:
+        parsed = landing_brief.parse("\n".join(bdoc.lines)) if start else None
     except landing_brief.BriefError:
         parsed = None
-    ai, ai_lines = is_ai_feature(doc, brief)
+    ai, ai_lines = is_ai_feature(bdoc if brief_doc is not None and "line" in brief else doc, brief)
+    if brief_doc is not None and "line" in brief:
+        ai_lines = []  # the line is in the brief file, cited by the brief finding
+    brief_findings = [*check_brief(bdoc, start, brief), *([check_date(parsed, brief, as_of), check_outcome(bdoc, brief)] if parsed else [])]
+    for f in brief_findings:
+        f.file = bfile
+    match = check_brief_match(doc, parsed) if brief_doc is not None else None
     findings = [
-        *check_brief(doc, start, brief),
-        *([check_date(parsed, brief, as_of), check_outcome(doc, brief)] if parsed else []),
-        check_owner(doc, brief),
+        *brief_findings,
+        *([match] if match else []),
+        check_owner(doc, brief, bfile),
         check_rollout(doc),
         check_rollback(doc),
         check_eval(doc, ai, ai_lines),
         check_placeholders(doc),
         check_guardrail(doc),
-        check_baseline(doc, brief),
+        check_baseline(doc, brief, separate=brief_doc is not None),
         check_assumptions(doc),
         check_certainty(doc),
         check_instructions(doc),
@@ -490,6 +539,7 @@ def audit(doc: Doc, as_of: datetime.date | None = None) -> dict:
         "tool": "spec-auditor",
         "version": VERSION,
         "spec": doc.path,
+        "brief": bdoc.path if brief_doc is not None else None,
         "as_of": as_of.isoformat() if as_of else None,
         "ai_feature": ai,
         "verdict": "hold" if holds else "pass",
@@ -501,15 +551,17 @@ def audit(doc: Doc, as_of: datetime.date | None = None) -> dict:
 ORDER = ("hold", "note", "pass")
 
 
-def refs(lines: list[int]) -> str:
-    return ("L" + ", L".join(str(n) for n in lines)) if lines else "-"
+def refs(lines: list[int], file: str = "spec") -> str:
+    if not lines:
+        return "-"
+    return ("brief " if file == "brief" else "") + "L" + ", L".join(str(n) for n in lines)
 
 
 def render_text(report: dict) -> str:
     c = report["counts"]
     out = [f"spec-auditor {report['version']}: {report['spec']}", f"AI feature: {'yes' if report['ai_feature'] else 'no'}", ""]
     for f in sorted(report["findings"], key=lambda f: ORDER.index(f["result"])):
-        out.append(f"[{f['result'].upper():4}] {f['check']:<12} {refs(f['lines']):<22} {f['message']}")
+        out.append(f"[{f['result'].upper():4}] {f['check']:<12} {refs(f['lines'], f.get('file', 'spec')):<22} {f['message']}")
         if f["fix"] and f["result"] != "pass":
             out.append(f"{'':42} Fix: {f['fix']}")
     out += ["", f"Verdict: {report['verdict'].upper()} ({c['hold']} hold, {c['note']} note, {c['pass']} pass)"]
@@ -572,12 +624,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("notes", nargs="?", help="quotes: a JSON file of the model's notes")
     ap.add_argument("--source", choices=sources.KINDS, default="file", help="where the spec came from: file (default), linear, notion or gdrive")
     ap.add_argument("--meta", help="notion or gdrive: the page or file object the connector returned, for the title, link and edit date")
+    ap.add_argument("--brief", help="audit: the landing brief as its own file (the Landing Loop's briefs/<bet>.md); brief checks read it, and a copy in the spec must match")
+    ap.add_argument("--illustrative", action="store_true", help="audit: tag the HTML page Illustrative, for sample data")
     ap.add_argument("--project", help="linear: the project's name, when the saved file holds several")
     ap.add_argument("--as-of", help="audit: today's date, YYYY-MM-DD, to hold a definition-of-good date in the past")
     ap.add_argument("--json", action="store_true", help="audit: print the report as JSON")
     ap.add_argument("--fail-on-hold", action="store_true", help="audit: exit 2 when the verdict is hold, to gate a pull request or CI job")
     ap.add_argument("--format", choices=["text", "md"], default="text", help="audit: text (default) or Markdown")
     ap.add_argument("--out", help="audit: a folder to write audit.html (Leader Report style), audit.md and audit.json")
+    ap.add_argument("--html", help="audit: write the HTML page here, and its Markdown twin beside it with .md")
     ap.add_argument("--bet", help="audit: the bet's slug; writes the spec key of LANDING/<bet>.json, the Landing Loop record")
     ap.add_argument("--landing", default="landing", help="audit: the folder holding Landing Loop records (default: landing)")
     args = ap.parse_args(argv)
@@ -607,7 +662,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if bad else 0
     except AuditError as e:
         raise SystemExit(f"spec_audit: {e}") from None
-    report = audit(doc, as_of)
+    brief_doc = None
+    if args.brief:
+        try:
+            brief_doc = load(Path(args.brief))
+        except AuditError as e:
+            raise SystemExit(f"spec_audit: {e}") from None
+    report = audit(doc, as_of, brief_doc)
     report["source"] = source
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -616,16 +677,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.out:
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
-        (out / "audit.html").write_text(render.page(report, doc.lines, source), encoding="utf-8")
+        (out / "audit.html").write_text(render.page(report, doc.lines, source, brief_doc.lines if brief_doc else None, args.illustrative), encoding="utf-8")
         (out / "audit.md").write_text(render.markdown(report, source), encoding="utf-8")
         (out / "audit.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"spec_audit: wrote audit.html, audit.md and audit.json to {out}", file=sys.stderr)
+    if args.html:
+        page_path = Path(args.html)
+        page_path.parent.mkdir(parents=True, exist_ok=True)
+        page_path.write_text(render.page(report, doc.lines, source, brief_doc.lines if brief_doc else None, args.illustrative), encoding="utf-8")
+        page_path.with_suffix(".md").write_text(render.markdown(report, source), encoding="utf-8")
+        print(f"spec_audit: wrote {page_path} and {page_path.with_suffix('.md')}", file=sys.stderr)
     if args.bet:
-        start, fields = brief_fields(doc)
-        where = source.get("location") or source.get("file") or str(args.path)
-        brief = loop.brief_figures("\n".join(doc.lines), where, {k: n for k, (n, _) in fields.items()}, as_of.isoformat()) if start else {}
+        bdoc = brief_doc or doc
+        start, fields = brief_fields(bdoc)
+        where = args.brief or source.get("location") or source.get("file") or str(args.path)
+        brief = loop.brief_figures("\n".join(bdoc.lines), where, {k: n for k, (n, _) in fields.items()}, as_of.isoformat()) if start else {}
         try:
-            path = loop.write(Path(args.landing), args.bet, loop.spec_key(report, source, brief, as_of.isoformat()), Path(args.path))
+            path = loop.write(Path(args.landing), args.bet, loop.spec_key(report, source, brief, as_of.isoformat()), Path(args.brief or args.path))
         except loop.LoopError as e:
             raise SystemExit(f"spec_audit: {e}") from None
         print(f"spec_audit: wrote the spec key of {path}; every other key is as it was.", file=sys.stderr)

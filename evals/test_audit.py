@@ -9,6 +9,7 @@ import datetime
 import hashlib
 import io
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -417,12 +418,12 @@ class LoopRecord(unittest.TestCase):
             sa.main(["audit", str(spec), "--as-of", "2026-11-26", "--bet", bet, "--landing", str(folder)])
         return json.loads((folder / f"{bet}.json").read_text(encoding="utf-8"))
 
-    def test_new_record_gets_schema_bet_brief_and_spec(self):
+    def test_new_record_gets_only_schema_bet_and_spec(self):
         with tempfile.TemporaryDirectory() as tmp:
             rec = self.run_bet(Path(tmp))
-        self.assertEqual(list(rec), ["schema", "bet", "brief", "spec"])
+        self.assertEqual(list(rec), ["schema", "bet", "spec"])
         self.assertEqual(rec["schema"], "landing-loop/1")
-        self.assertEqual(rec["brief"]["sha256"], hashlib.sha256(GOOD.read_bytes()).hexdigest())
+        self.assertEqual(rec["spec"]["brief_file"]["sha256"], hashlib.sha256(GOOD.read_bytes()).hexdigest())
         self.assertEqual(rec["spec"]["verdict"], "pass")
 
     def test_only_the_spec_key_changes(self):
@@ -491,7 +492,12 @@ class Html(unittest.TestCase):
         self.assertNotIn("<script>alert", out)
         self.assertNotIn("<b>x</b>", out)
         self.assertNotIn("--landed)", out.split("</style>")[1])
-        self.assertIn('class="verdict hold"', out)
+        self.assertIn('class="vd hold"', out)
+        template = render.TEMPLATE.read_text(encoding="utf-8")
+        self.assertTrue(out.startswith(template[: template.index("{{TITLE}}")]), "the page must be the vendored template with its slots filled")
+        self.assertIn('<span translate="no">Dacard</span>', out)
+        for word in ("hold", "note", "pass"):
+            self.assertIn(f'<span class="st {word}">{word}</span>', out)
 
     def test_out_writes_html_and_markdown_twin(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -506,6 +512,42 @@ class Html(unittest.TestCase):
         self.assertEqual(data["verdict"], "hold")
         for f in data["findings"]:
             self.assertIn(f["check"], md)
+
+
+class Sample(unittest.TestCase):
+    """The committed sample for the /skills page is what the README's command makes, byte for byte."""
+
+    def command(self) -> list[str]:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        section = readme[readme.index("## Sample") :]
+        block = section[section.index("```bash") + len("```bash") : section.index("```", section.index("```bash") + 7)]
+        line = block.strip()
+        self.assertNotIn("\n", line, "the Sample command must be one line, so a chain script can call it")
+        return line.split()
+
+    def test_readme_command_reproduces_the_committed_sample(self):
+        args = self.command()
+        self.assertEqual(args[:2], ["python3", "skills/spec-auditor/scripts/spec_audit.py"])
+        committed = {rel: (ROOT / rel).read_bytes() for rel in ("examples/acme/spec-auditor.html", "examples/acme/spec-auditor.md", "examples/acme/landing/quote-drafting.json")}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            shutil.copytree(ROOT / "skills", work / "skills")
+            shutil.copytree(ROOT / "examples" / "acme" / "briefs", work / "examples" / "acme" / "briefs")
+            shutil.copytree(ROOT / "examples" / "acme" / "specs", work / "examples" / "acme" / "specs")
+            subprocess.run([sys.executable, *args[1:]], cwd=work, check=True, capture_output=True, text=True)  # noqa: S603
+            for rel, want in committed.items():
+                self.assertEqual((work / rel).read_bytes(), want, f"{rel} differs. Run the README Sample command and commit the result.")
+
+    def test_sample_briefs_are_the_canonical_copies(self):
+        # The canonical briefs live in the landing-loop repository; this checks the copies still parse and the bet is there.
+        brief = landing_brief.parse((ROOT / "examples/acme/briefs/quote-drafting.md").read_text(encoding="utf-8"))
+        self.assertEqual(brief.metric, "Quote draft acceptance rate")
+
+    def test_sample_record_holds_only_the_spec_key(self):
+        rec = json.loads((ROOT / "examples/acme/landing/quote-drafting.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(rec), ["bet", "schema", "spec"])
+        self.assertEqual(rec["spec"]["verdict"], "hold")
+        self.assertEqual({h["check"] for h in rec["spec"]["holds"]}, {"rollback", "eval-plan"})
 
 
 class Hygiene(unittest.TestCase):

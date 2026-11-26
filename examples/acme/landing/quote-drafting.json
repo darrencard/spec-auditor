@@ -1,0 +1,102 @@
+{
+  "schema": "landing-loop/1",
+  "bet": "quote-drafting",
+  "spec": {
+    "tool": "spec-auditor",
+    "version": "0.2.0",
+    "as_of": "2026-08-03",
+    "source": {
+      "kind": "file",
+      "title": "PRD: Quote drafting assistant",
+      "location": "examples/acme/specs/quote-drafting.md",
+      "updated_at": "",
+      "file": "examples/acme/specs/quote-drafting.md"
+    },
+    "verdict": "hold",
+    "ai_feature": true,
+    "counts": {
+      "hold": {
+        "value": 2,
+        "unit": "findings",
+        "source": "spec-auditor 0.2.0, audit of examples/acme/specs/quote-drafting.md",
+        "window": {
+          "from": "2026-08-03",
+          "to": "2026-08-03"
+        },
+        "as_of": "2026-08-03"
+      },
+      "note": {
+        "value": 1,
+        "unit": "findings",
+        "source": "spec-auditor 0.2.0, audit of examples/acme/specs/quote-drafting.md",
+        "window": {
+          "from": "2026-08-03",
+          "to": "2026-08-03"
+        },
+        "as_of": "2026-08-03"
+      },
+      "pass": {
+        "value": 11,
+        "unit": "findings",
+        "source": "spec-auditor 0.2.0, audit of examples/acme/specs/quote-drafting.md",
+        "window": {
+          "from": "2026-08-03",
+          "to": "2026-08-03"
+        },
+        "as_of": "2026-08-03"
+      }
+    },
+    "brief": {
+      "metric": "Quote draft acceptance rate",
+      "better": "higher",
+      "by": "2026-11-15",
+      "line": "model call",
+      "decides": "Head of Product, Quoting squad",
+      "bar": {
+        "value": 40.0,
+        "unit": "%",
+        "source": "examples/acme/briefs/quote-drafting.md, line 9",
+        "window": {
+          "from": "2026-08-03",
+          "to": "2026-11-15"
+        },
+        "as_of": "2026-08-03"
+      }
+    },
+    "holds": [
+      {
+        "check": "rollback",
+        "file": "spec",
+        "lines": [
+          48,
+          50
+        ],
+        "message": "The rollback plan has no trigger threshold.",
+        "fix": "Say what number triggers it (such as an error rate over 2%) and how it is done."
+      },
+      {
+        "check": "eval-plan",
+        "file": "spec",
+        "lines": [
+          37,
+          39,
+          40
+        ],
+        "message": "The eval plan has no time it runs.",
+        "fix": "State the number of cases, the pass bar as a number, and when the evals run."
+      }
+    ],
+    "notes": [
+      {
+        "check": "baseline",
+        "file": "spec",
+        "lines": [],
+        "message": "No current value for the metric, so the size of the gap to the bar is unknown."
+      }
+    ],
+    "brief_file": {
+      "path": "examples/acme/briefs/quote-drafting.md",
+      "sha256": "decbe39590cc57b3d47125722a8d43e445d33c8f2f525c00277b94b7937dc95f"
+    }
+  }
+}

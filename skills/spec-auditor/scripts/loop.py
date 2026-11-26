@@ -1,8 +1,8 @@
 """The spec key of the Landing Loop record, landing/<bet>.json (plans/landing-loop-contract-2026-11.md, schema landing-loop/1).
 
-spec-auditor writes only the `spec` key and keeps every other key exactly as it found it. A new record gets the schema,
-the bet and the brief (the spec file's path and SHA-256), because the spec is where the brief is read; an existing
-record's brief is never changed. Every figure carries value, unit, source, window (from, to) and as_of. The verdict
+spec-auditor writes only the `spec` key and keeps every other key exactly as it found it. A new record gets only the
+schema and the bet beside it; the top-level `brief` is left to the step that owns it. The brief file this audit read
+(its path and SHA-256) is kept inside `spec` as `brief_file`. Every figure carries value, unit, source, window (from, to) and as_of. The verdict
 is pass or hold, set in code; no status word (landed, watch, stalled) is written here, because the spec is not shipped.
 """
 
@@ -67,8 +67,8 @@ def spec_key(report: Json, source: Json, brief: Json, as_of: str) -> Json:
         "ai_feature": report["ai_feature"],
         "counts": counts,
         "brief": brief,
-        "holds": [{"check": f["check"], "lines": f["lines"], "message": f["message"], "fix": f["fix"]} for f in report["findings"] if f["result"] == "hold"],
-        "notes": [{"check": f["check"], "lines": f["lines"], "message": f["message"]} for f in report["findings"] if f["result"] == "note"],
+        "holds": [{"check": f["check"], "file": f.get("file", "spec"), "lines": f["lines"], "message": f["message"], "fix": f["fix"]} for f in report["findings"] if f["result"] == "hold"],
+        "notes": [{"check": f["check"], "file": f.get("file", "spec"), "lines": f["lines"], "message": f["message"]} for f in report["findings"] if f["result"] == "note"],
     }
 
 
@@ -87,12 +87,13 @@ def write(folder: Path, bet: str, spec: Json, spec_file: Path) -> Path:
         if record.get("bet") != bet:
             raise LoopError(f"{path} is for the bet {record.get('bet')!r}, not {bet!r}. Nothing was written.")
     else:
-        record = {"schema": SCHEMA, "bet": bet, "brief": {"path": str(spec_file), "sha256": hashlib.sha256(spec_file.read_bytes()).hexdigest()}}
-    record["spec"] = spec
+        record = {"schema": SCHEMA, "bet": bet}
+    record["spec"] = {**spec, "brief_file": {"path": str(spec_file), "sha256": hashlib.sha256(spec_file.read_bytes()).hexdigest()}}
     folder.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=folder, prefix=f".{bet}.", suffix=".json")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(record, f, indent=2, ensure_ascii=False)
         f.write("\n")
+    os.chmod(tmp, 0o644)  # mkstemp makes the file private; a loop record is shared with the other skills
     os.replace(tmp, path)
     return path

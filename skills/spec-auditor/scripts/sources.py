@@ -10,14 +10,13 @@ convert.py, vendored unchanged at the commit in VENDORED.json). A Markdown or te
            --meta for the page object, which gives the title, the url and last_edited_time.
   gdrive   the file's text (the connector's read_file_content result, or a download as .md, .txt or .html), with
            --meta for the file object or files.list page, which gives the name, the link and modifiedTime.
-  file     a Markdown, text or HTML file. Its modified time is when it was last changed.
+  file     a Markdown, text or HTML file. Its modified time is not read: it changes on every checkout.
 
 This module reads files. It makes no network calls.
 """
 
 from __future__ import annotations
 
-import datetime
 import json
 from pathlib import Path
 from typing import Any
@@ -60,10 +59,6 @@ def _text(path: Path) -> str:
 def _iso(value: Any) -> str:
     moment = convert.when(value)
     return moment.date().isoformat() if moment else ""
-
-
-def _modified(path: Path) -> str:
-    return datetime.datetime.fromtimestamp(path.stat().st_mtime, tz=datetime.UTC).date().isoformat()
 
 
 def linear(path: Path, project: str | None = None) -> tuple[str, Json]:
@@ -141,7 +136,8 @@ def gdrive(path: Path, meta: Path | None = None) -> tuple[str, Json]:
 def local(path: Path) -> tuple[str, Json]:
     text = _text(path)
     heading = next((x[2:].strip() for x in text.splitlines() if x.startswith("# ")), "")
-    return text, {"kind": "file", "title": heading or path.stem, "location": str(path), "updated_at": _modified(path), "file": str(path)}
+    # A file's modified time changes on every checkout, so it is not an edit date anyone can rely on: left empty.
+    return text, {"kind": "file", "title": heading or path.stem, "location": str(path), "updated_at": "", "file": str(path)}
 
 
 def load(kind: str, path: Path, meta: Path | None = None, project: str | None = None) -> tuple[str, Json]:

@@ -29,6 +29,16 @@ Verdict: HOLD (6 hold, 5 note, 0 pass)
 
 Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML page in the Leader Report style, with a Markdown twin; `--format md` prints the table to paste into a review.
 
+## Sample
+
+[examples/acme/spec-auditor.html](examples/acme/spec-auditor.html) audits the Acme quote-drafting PRD against its landing brief: a hold, because the rollback plan has no trigger threshold and the eval plan does not say when it runs. Acme is an invented company and every figure is illustrative. Regenerate the page, its Markdown twin and the `spec` key of `examples/acme/landing/quote-drafting.json` from the repository root:
+
+```bash
+python3 skills/spec-auditor/scripts/spec_audit.py audit examples/acme/specs/quote-drafting.md --brief examples/acme/briefs/quote-drafting.md --as-of 2026-08-03 --illustrative --html examples/acme/spec-auditor.html --bet quote-drafting --landing examples/acme/landing
+```
+
+The briefs in `examples/acme/briefs/` are copies of the Landing Loop's canonical Acme briefs. A test runs this command and checks the output matches the committed files byte for byte.
+
 ## What it checks
 
 | Check | Holds when |
