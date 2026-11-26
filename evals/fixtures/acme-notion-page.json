@@ -1,0 +1,16 @@
+{
+  "object": "page",
+  "id": "illustrative-notion-page",
+  "url": "https://www.notion.so/acme/Quote-drafts-illustrative",
+  "last_edited_time": "2026-11-21T09:30:00.000Z",
+  "properties": {
+    "Name": {
+      "type": "title",
+      "title": [
+        {
+          "plain_text": "Quote drafts from job notes"
+        }
+      ]
+    }
+  }
+}

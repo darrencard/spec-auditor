@@ -1,0 +1,14 @@
+{
+  "source": "https://github.com/darrencard/product-engineering-update",
+  "commit": "366da9bfede540ec19e9164ad5ad17ce28c1d06b",
+  "note": "Copied unchanged with git show <commit>:<path>. evals/test_audit.py checks every hash. To update, copy again from a new commit and change both.",
+  "files": {
+    "scripts/landing_brief.py": {"from": "skills/product-engineering-update/scripts/landing_brief.py", "sha256": "2d13573543c74ebe1bf001b97287287474a0ec298f34709a1bbfc643be051948"},
+    "scripts/from_linear.py": {"from": "skills/product-engineering-update/scripts/from_linear.py", "sha256": "0aea681e00c2ab15e37031d058ad4b81e5cea25c2da25a47dfc4138e481b922d"},
+    "scripts/from_notion.py": {"from": "skills/product-engineering-update/scripts/from_notion.py", "sha256": "bcd395fe1bc0596180d1912a9e9062c8b9c520fa1af26694ca9e686bcfc1fa82"},
+    "scripts/from_gdrive.py": {"from": "skills/product-engineering-update/scripts/from_gdrive.py", "sha256": "05e9a13a063dbdb44d5f9421e8547c0c674fee121f6c7c897df68cc352b62bd7"},
+    "scripts/collect.py": {"from": "skills/product-engineering-update/scripts/collect.py", "sha256": "f58d3cd6db1fc7a5e73441618ed94460189aeb724be1c42934313d23d5bd93c4"},
+    "scripts/convert.py": {"from": "skills/product-engineering-update/scripts/convert.py", "sha256": "f1d055c02e29c67690f3caac7b7eb3213afab20042ff78a8080ebf172b183a55"},
+    "assets/template.html": {"from": "skills/product-engineering-update/assets/template.html", "sha256": "e5740431ab5269606709d352d3d253325df740830e8316f06478873e71d430d0"}
+  }
+}

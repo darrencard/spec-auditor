@@ -10,7 +10,7 @@ A free Claude skill that checks a PRD or spec against its landing brief and give
 Install the spec-auditor skill from https://github.com/darrencard/spec-auditor: clone it, copy skills/spec-auditor into ~/.claude/skills/, and run python3 -m unittest discover -s evals to check it. Then audit my spec at PATH with today's date as --as-of, show me the report as printed, and quote the spec word for word for anything you add.
 ```
 
-Replace `PATH` with a Markdown, plain text, or Notion or Google Docs export (`.md`, `.txt`, `.html`). Needs Python 3.11 or later; nothing else to install.
+Replace `PATH` with the spec. With a Linear, Notion or Google Drive connector in the session, name the doc instead and Claude fetches it; otherwise use a Markdown, text or HTML file. Needs Python 3.11 or later; nothing else to install.
 
 ## What you get
 
@@ -27,7 +27,7 @@ The weak Acme fixture, first lines of the report:
 Verdict: HOLD (10 hold, 5 note, 1 pass)
 ```
 
-Each finding also prints a one-line fix. `--format md` gives the same as a table to paste into a review.
+Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML page in the Leader Report style, with a Markdown twin; `--format md` prints the table to paste into a review.
 
 ## What it checks
 
@@ -55,13 +55,17 @@ Notes, which never change the verdict: a bar on use rather than outcome, no guar
 - run: python3 skills/spec-auditor/scripts/spec_audit.py audit docs/specs/quote-drafts.md --fail-on-hold --format md >> "$GITHUB_STEP_SUMMARY"
 ```
 
+## Part of the Landing Loop
+
+Step 2 of five skills that share one landing brief with the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update). `--bet <slug>` writes only the `spec` key of `landing/<slug>.json`, the record each step reads, and keeps every other key as it was. Every figure in it has a value, unit, source, window and date.
+
 ## How it works
 
 - `spec_audit.py audit` runs every check in code and sets the verdict: hold if any finding holds.
 - `spec_audit.py quotes` rejects any note the model adds whose quote is not word for word on the line it cites, or whose numbers are not in that quote.
-- `landing_brief.py` is an unchanged copy of the parser in the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update), so a spec that passes has a brief the Report can read after launch.
+- `landing_brief.py`, the Linear, Notion and Drive readers and the page template are unchanged copies from the Leader Report, pinned by commit and SHA-256 in `scripts/VENDORED.json`. A spec that passes has a brief the Report can read after launch.
 - Local only: standard library Python, no network calls.
 
 ## Status
 
-v0.1.0. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative), not yet on a real team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
+v0.2.0. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.

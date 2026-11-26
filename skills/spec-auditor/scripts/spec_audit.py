@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import html
 import json
 import re
 import sys
@@ -53,14 +52,17 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import landing_brief  # noqa: E402  (vendored, unchanged, from the landing-brief skill)
+import landing_brief  # noqa: E402  (vendored unchanged from the Leader Report; see VENDORED.json)
+import loop  # noqa: E402
+import render  # noqa: E402
+import sources  # noqa: E402
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 # A spec is tens of pages at most. Anything larger is not one.
 MAX_CHARS = 400_000
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 # Bold-only lines act as headings in many Google Docs and Notion exports: "**Rollout**". Level 7 sits below any "#".
-BOLD_HEADING = re.compile(r"^(?:\*\*|__)([^*_:]{2,60})(?:\*\*|__)\s*$")
+BOLD_HEADING = re.compile(r"^(?:\*\*|__)([^*_:]{2,60}?)\s*:?\s*(?:\*\*|__)\s*:?\s*$")
 ESCAPED = re.compile(r"\\([\\`*_{}\[\]()#+\-.!>|~])")
 NUM = re.compile(r"(?<![\w.])[$£€]?\d[\d,]*(?:\.\d+)?%?")
 ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
@@ -75,7 +77,20 @@ SECTIONS = {
     "rollout": ("rollout", "roll-out", "rollout plan", "launch plan", "release plan", "launch", "release"),
     "rollback": ("rollback", "roll back", "rollback plan", "kill switch", "off switch", "backout plan", "back-out plan"),  # voice-lint-disable-line
     "guardrail": ("guardrail", "guardrails", "guardrail metrics", "counter-metrics", "counter metrics", "what must not get worse"),
-    "assumptions": ("assumptions", "riskiest assumption", "riskiest assumptions", "risks", "risks and assumptions", "open questions", "unknowns"),
+    "assumptions": (
+        "assumptions",
+        "riskiest assumption",
+        "riskiest assumptions",
+        "risks",
+        "risks and assumptions",
+        "open questions",
+        "unknowns",
+        "known gotchas",
+        "gotchas",
+        "known risks",
+        "open decisions",
+        "decisions",
+    ),
     "eval": ("eval plan", "evals", "eval", "evaluation", "evaluation plan", "model evaluation", "quality bar"),
 }
 OWNER_KEYS = ("decides the next step", "decides", "owner", "dri", "accountable", "product owner")
@@ -96,7 +111,16 @@ WHEN = re.compile(
     r"|\bci\b|nightly|weekly|daily|on each|per release|pre-launch",
     re.I,
 )
-AI_WORDS = re.compile(r"\b(?:LLM|large language model|language model|prompts?|AI assistant|AI feature|model call|generative|GPT|Claude|agents?|AI)\b", re.I)
+# Signs that the work itself calls a model. Bare "AI" and "prompt" are left out: the real run showed them in domains
+# (dacard.ai), in template headers ("AI-optimized", "Product Requirements Prompt") and in prose about the market.
+AI_WORDS = re.compile(
+    r"\b(?:LLMs?|large language models?|language models?|model calls?|calls? (?:a|the) model|model outputs?|system prompts?|prompt templates?|prompt changes?"
+    r"|AI (?:assistant|feature|agent|model|summar\w*|draft\w*)|AI-(?:generated|drafted|written)|generative|GPT-?\d*|Claude|Gemini|embeddings?|fine-tun\w+|inference)\b",
+    re.I,
+)
+DOMAIN = re.compile(r"\b[\w-]+(?:\.[\w-]+)*\.ai\b", re.I)
+PROBLEM_KEYS = ("problem", "the problem", "problem statement", "problem it solves", "problem to solve", "why")
+GOOD_KEYS = ("success metric", "success metrics", "success criteria", "definition of good", "goal", "kpi", "north star")
 CERTAIN = re.compile(r"\bwill (?:increase|decrease|reduce|cut|double|triple|drive|grow|improve|lift|boost|eliminate)\b|\bguarantee[sd]?\b|\bdefinitely\b|\bcertain to\b", re.I)
 VAGUE_GOOD = re.compile(r"\b(?:improve|better|faster|easier|delight|world-class|more engaging)\b", re.I)
 # Text that reads as an instruction to whoever, or whatever, reviews the spec. Flagged as a note; it changes nothing.
@@ -147,11 +171,12 @@ class Doc:
     def line(self, n: int) -> str:
         return self.lines[n - 1]
 
-    def section(self, names: tuple[str, ...]) -> tuple[int, list[int]] | None:
-        """(heading line, non-blank body line numbers) for the first heading whose text is one of names, else None."""
+    def section(self, names: tuple[str, ...], prefix: bool = False) -> tuple[int, list[int]] | None:
+        """(heading line, non-blank body line numbers) for the first heading whose text is one of names, else None.
+        With prefix, a heading that starts with a name and a space also counts ("Decisions for the owner")."""
         for i, (n, level, text) in enumerate(self.headings):
             clean = re.sub(r"^[\d.]+\s*", "", text).strip(" :")
-            if clean in names:
+            if clean in names or (prefix and any(clean.startswith(x + " ") for x in names)):
                 end = len(self.lines) + 1
                 for m, lv, _ in self.headings[i + 1 :]:
                     if lv <= level:
@@ -285,7 +310,7 @@ def is_ai_feature(doc: Doc, brief: dict[str, tuple[int, str]]) -> tuple[bool, li
             return True, [n]
         if value.lower().startswith("fixed code"):
             return False, [n]
-    hits = [n for n, line in enumerate(doc.lines, 1) if AI_WORDS.search(line)]
+    hits = [n for n, line in enumerate(doc.lines, 1) if AI_WORDS.search(DOMAIN.sub("", line))]
     return bool(hits), hits[:5]
 
 
@@ -306,6 +331,9 @@ def check_problem(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
         lines = [n]
     else:
         sec = doc.section(SECTIONS["problem"])
+        keyed = [(n, v) for n, _, v in key_lines(doc, PROBLEM_KEYS) if v]
+        if keyed:
+            sec = (keyed[0][0], [keyed[0][0]])
         if sec is None:
             return Finding("problem", "hold", "No problem statement.", [], "State the problem in one or two sentences, in the customer's terms.")
         lines, text = [sec[0], *sec[1][:3]], body_text(doc, sec[1])
@@ -337,6 +365,9 @@ def check_good(doc: Doc, brief: dict[str, tuple[int, str]], as_of: datetime.date
             out.append(Finding("good", "hold", f"The date {b['by'][1]} is before {as_of.isoformat()}, so the bar cannot be met in time.", [b["by"][0]], "Set a date that is still ahead."))
         return out
     sec = doc.section(SECTIONS["good"])
+    keyed = [(n, v) for n, _, v in key_lines(doc, GOOD_KEYS) if v]
+    if sec is None and keyed:
+        sec = (keyed[0][0], [keyed[0][0]])
     if sec is None:
         missing = [p for p in parts if p not in brief]
         where = [brief[p][0] for p in parts if p in brief]
@@ -349,7 +380,11 @@ def check_good(doc: Doc, brief: dict[str, tuple[int, str]], as_of: datetime.date
     if has_num and has_date:
         return [
             Finding(
-                "good", "note", "Success is described with a number and a date, but not as a landing brief bar.", [head, *body[:4]], "Move it into the landing brief as Metric, Bar, Better and By."
+                "good",
+                "note",
+                "Success is described with a number and a date, but not as a landing brief bar.",
+                sorted({head, *body[:4]}),
+                "Move it into the landing brief as Metric, Bar, Better and By.",
             )
         ]
     vague = [n for n in body if VAGUE_GOOD.search(doc.line(n))]
@@ -359,7 +394,7 @@ def check_good(doc: Doc, brief: dict[str, tuple[int, str]], as_of: datetime.date
             "good",
             "hold",
             f"Success is described without {lacks}, so no one can say whether it landed.",
-            [head, *(vague or body)[:4]],
+            sorted({head, *(vague or body)[:4]}),
             "Name one metric the team already measures, the bar, which way is better, and the date.",
         )
     ]
@@ -512,7 +547,7 @@ def check_baseline(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
 
 
 def check_assumptions(doc: Doc) -> Finding:
-    sec = doc.section(SECTIONS["assumptions"])
+    sec = doc.section(SECTIONS["assumptions"], prefix=True)
     if sec and sec[1] and not any(TESTED.search(doc.line(n)) for n in sec[1]):
         return Finding(
             "assumptions",
@@ -591,25 +626,8 @@ def render_text(report: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-def md_cell(text: str) -> str:
-    return html.escape(text, quote=False).replace("|", "\\|").replace("`", "'").replace("\n", " ")
-
-
 def render_md(report: dict) -> str:
-    c = report["counts"]
-    ai = "yes" if report["ai_feature"] else "no"
-    out = [
-        f"## Spec audit: **{report['verdict']}**",
-        "",
-        f"{c['hold']} hold, {c['note']} note, {c['pass']} pass. AI feature: {ai}. Line numbers refer to {md_cell(Path(report['spec']).name)}.",
-        "",
-        "| Result | Check | Lines | Finding | Fix |",
-        "|---|---|---|---|---|",
-    ]
-    for f in sorted(report["findings"], key=lambda f: ORDER.index(f["result"])):
-        fix = f["fix"] if f["result"] != "pass" else ""
-        out.append(f"| {f['result']} | {f['check']} | {refs(f['lines'])} | {md_cell(f['message'])} | {md_cell(fix)} |")
-    return "\n".join(out) + "\n"
+    return render.markdown(report, report.get("source"))
 
 
 def squash(text: str) -> str:
@@ -646,22 +664,41 @@ def check_quotes(doc: Doc, notes: object) -> list[dict]:
     return rows
 
 
+def load_source(args: argparse.Namespace) -> tuple[Doc, dict]:
+    """The spec as a Doc, and where it came from. Live sources are read with the Leader Report's readers (sources.py)."""
+    path = Path(args.path)
+    try:
+        text, source = sources.load(args.source, path, Path(args.meta) if args.meta else None, args.project)
+    except sources.SourceError as e:
+        raise AuditError(str(e)) from None
+    is_html = path.suffix.lower() in (".html", ".htm")
+    return parse_text(text, source.get("location") or str(path), is_html=is_html), source
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Audit a PRD or spec against its landing brief and a checklist.")
     ap.add_argument("command", choices=["audit", "text", "quotes"])
-    ap.add_argument("path", help="the spec: .md, .txt, or an .html export from Google Docs or Notion")
+    ap.add_argument("path", help="the spec: a file (.md, .txt, .html), or a saved Linear, Notion or Google Drive response")
     ap.add_argument("notes", nargs="?", help="quotes: a JSON file of the model's notes")
+    ap.add_argument("--source", choices=sources.KINDS, default="file", help="where the spec came from: file (default), linear, notion or gdrive")
+    ap.add_argument("--meta", help="notion or gdrive: the page or file object the connector returned, for the title, link and edit date")
+    ap.add_argument("--project", help="linear: the project's name, when the saved file holds several")
     ap.add_argument("--as-of", help="audit: today's date, YYYY-MM-DD, to hold a definition-of-good date in the past")
     ap.add_argument("--json", action="store_true", help="audit: print the report as JSON")
     ap.add_argument("--fail-on-hold", action="store_true", help="audit: exit 2 when the verdict is hold, to gate a pull request or CI job")
     ap.add_argument("--format", choices=["text", "md"], default="text", help="audit: text (default) or Markdown")
+    ap.add_argument("--out", help="audit: a folder to write audit.html (Leader Report style), audit.md and audit.json")
+    ap.add_argument("--bet", help="audit: the bet's slug; writes the spec key of LANDING/<bet>.json, the Landing Loop record")
+    ap.add_argument("--landing", default="landing", help="audit: the folder holding Landing Loop records (default: landing)")
     args = ap.parse_args(argv)
     try:
         as_of = datetime.date.fromisoformat(args.as_of) if args.as_of else None
     except ValueError:
         raise SystemExit(f"spec_audit: --as-of is {args.as_of!r}. Write it as YYYY-MM-DD.") from None
+    if args.bet and not as_of:
+        raise SystemExit("spec_audit: --bet needs --as-of, because every figure in the loop record carries its date.")
     try:
-        doc = load(Path(args.path))
+        doc, source = load_source(args)
         if args.command == "text":
             width = len(str(len(doc.lines)))
             sys.stdout.write("".join(f"{n:>{width}}  {line}\n" for n, line in enumerate(doc.lines, 1)))
@@ -681,10 +718,27 @@ def main(argv: list[str] | None = None) -> int:
     except AuditError as e:
         raise SystemExit(f"spec_audit: {e}") from None
     report = audit(doc, as_of)
+    report["source"] = source
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
-        sys.stdout.write(render_md(report) if args.format == "md" else render_text(report))
+        sys.stdout.write(render.markdown(report, source) if args.format == "md" else render_text(report))
+    if args.out:
+        out = Path(args.out)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "audit.html").write_text(render.page(report, doc.lines, source), encoding="utf-8")
+        (out / "audit.md").write_text(render.markdown(report, source), encoding="utf-8")
+        (out / "audit.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"spec_audit: wrote audit.html, audit.md and audit.json to {out}", file=sys.stderr)
+    if args.bet:
+        start, fields = brief_fields(doc)
+        where = source.get("location") or source.get("file") or str(args.path)
+        brief = loop.brief_figures("\n".join(doc.lines), where, {k: n for k, (n, _) in fields.items()}, as_of.isoformat()) if start else {}
+        try:
+            path = loop.write(Path(args.landing), args.bet, loop.spec_key(report, source, brief, as_of.isoformat()), Path(args.path))
+        except loop.LoopError as e:
+            raise SystemExit(f"spec_audit: {e}") from None
+        print(f"spec_audit: wrote the spec key of {path}; every other key is as it was.", file=sys.stderr)
     return 2 if args.fail_on_hold and report["verdict"] == "hold" else 0
 
 

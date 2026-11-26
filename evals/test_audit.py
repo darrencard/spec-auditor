@@ -23,6 +23,9 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import landing_brief  # noqa: E402
+import loop  # noqa: E402
+import render  # noqa: E402
+import sources  # noqa: E402
 import spec_audit as sa  # noqa: E402
 
 AS_OF = datetime.date(2026, 11, 26)
@@ -156,14 +159,14 @@ class Checks(unittest.TestCase):
         self.assertEqual(finding(report, "cost")["result"], "hold")
 
     def test_cost_on_one_line_holds(self):
-        text = "# Spec\n\nWe use a prompt.\n\nCost: 4,000 tokens per task at $0.000003 per token.\n"
+        text = "# Spec\n\nEach draft is a model call.\n\nCost: 4,000 tokens per task at $0.000003 per token.\n"
         f = finding(run(text), "cost")
         self.assertEqual(f["result"], "hold")
         self.assertIn("one line", f["message"])
         self.assertEqual(f["lines"], [5])
 
     def test_cost_outside_the_brief_counts_when_on_two_lines(self):
-        text = "# Spec\n\nUses a prompt.\n\n## Cost budget\n\nTokens per task: 4,000\nPrice per token: $0.000003\n"
+        text = "# Spec\n\nEach draft is a model call.\n\n## Cost budget\n\nTokens per task: 4,000\nPrice per token: $0.000003\n"
         self.assertEqual(finding(run(text), "cost")["result"], "pass")
 
     def test_bar_that_is_not_a_number_holds(self):
@@ -228,7 +231,7 @@ class Checks(unittest.TestCase):
         self.assertEqual(finding(report, "assumptions")["result"], "pass")
 
     def test_eval_plan_needs_cases_bar_and_when(self):
-        f = finding(run("# Spec\n\nUses a prompt.\n\n## Eval plan\n\nWe will test it on 200 cases.\n"), "eval-plan")
+        f = finding(run("# Spec\n\nEach draft is a model call.\n\n## Eval plan\n\nWe will test it on 200 cases.\n"), "eval-plan")
         self.assertEqual(f["result"], "hold")
         self.assertIn("pass bar", f["message"])
         self.assertIn("time it runs", f["message"])
@@ -251,6 +254,39 @@ class Checks(unittest.TestCase):
             sa.parse_text("   \n")
         with self.assertRaises(sa.AuditError):
             sa.parse_text("x" * (sa.MAX_CHARS + 1))
+
+
+class RealRunRegressions(unittest.TestCase):
+    """Patterns the first real run (2026-11-26, three internal specs) got wrong. The text here is invented, in the same shape."""
+
+    def test_a_domain_ending_in_ai_is_not_an_ai_feature(self):
+        report = run("# Spec\n\nThe page at acme.ai gets a new pricing table.\n")
+        self.assertFalse(report["ai_feature"])
+
+    def test_template_header_words_are_not_an_ai_feature(self):
+        text = "# PRP: Pricing table\n# Product Requirements Prompt -- AI-optimized implementation blueprint\n\nA static table.\n"
+        self.assertFalse(run(text)["ai_feature"])
+
+    def test_real_ai_signals_still_count(self):
+        for line in ("Drafts are AI-generated from job notes.", "The AI assistant replies.", "Each reply calls a model.", "Uses Claude to summarise."):
+            self.assertTrue(run(f"# Spec\n\n{line}\n")["ai_feature"], line)
+
+    def test_bold_heading_with_colon_is_a_section(self):
+        text = "# Spec\n\n**Out of scope:**\n\n- No mobile view.\n"
+        self.assertEqual(finding(run(text), "non-goals")["result"], "pass")
+
+    def test_problem_and_success_key_lines_are_read(self):
+        text = "# Spec\n\n**Problem it solves:** Leaders switch between two tools to see blocked work each week.\n\n**Success metric:** Leaders find blocked work in 30 seconds.\n"
+        report = run(text)
+        self.assertEqual(finding(report, "problem")["result"], "pass")
+        good = finding(report, "good")
+        self.assertEqual((good["result"], good["lines"]), ("hold", [5]))
+        self.assertIn("without a date", good["message"])
+
+    def test_gotchas_and_decisions_sections_count_as_assumptions(self):
+        for head in ("Known gotchas", "Decisions for the owner"):
+            text = f"# Spec\n\n## {head}\n\n- The tracker API pages at 50 items. Test: a spike before build.\n"
+            self.assertEqual(finding(run(text), "assumptions")["result"], "pass", head)
 
 
 class Quotes(unittest.TestCase):
@@ -332,14 +368,152 @@ class Output(unittest.TestCase):
 
 
 class Vendored(unittest.TestCase):
-    def test_landing_brief_is_the_unchanged_copy(self):
-        digest = hashlib.sha256((SCRIPTS / "landing_brief.py").read_bytes()).hexdigest()
-        self.assertEqual(digest, LANDING_BRIEF_SHA256, "landing_brief.py changed. Copy it again from the landing-brief skill and update the hash.")
+    def test_every_vendored_file_matches_its_pinned_hash(self):
+        pins = json.loads((SCRIPTS / "VENDORED.json").read_text(encoding="utf-8"))
+        self.assertRegex(pins["commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(pins["files"]["scripts/landing_brief.py"]["sha256"], LANDING_BRIEF_SHA256)
+        for rel, pin in pins["files"].items():
+            digest = hashlib.sha256((SCRIPTS.parent / rel).read_bytes()).hexdigest()
+            self.assertEqual(digest, pin["sha256"], f"{rel} changed. Copy it again from the Leader Report at a pinned commit and update VENDORED.json.")
 
     def test_good_fixture_brief_is_accepted_by_landing_brief(self):
         brief = landing_brief.parse(GOOD.read_text(encoding="utf-8"))
         self.assertEqual(brief.line, "model call")
         self.assertEqual(brief.tokens_per_task, 9000)
+
+
+class Sources(unittest.TestCase):
+    def audit_cli(self, *args: str) -> dict:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            sa.main(["audit", *args, "--json", "--as-of", "2026-11-26"])
+        return json.loads(buf.getvalue())
+
+    def test_linear_project_is_read_with_the_leader_report_reader(self):
+        report = self.audit_cli(str(FIXTURES / "acme-linear-project.json"), "--source", "linear")
+        self.assertEqual(report["verdict"], "pass")
+        src = report["source"]
+        self.assertEqual((src["kind"], src["title"], src["updated_at"]), ("linear", "Quote drafts from job notes", "2026-11-20"))
+        self.assertTrue(src["leader_report_reads_brief"])
+        self.assertEqual(results(report), results(sa.audit(sa.load(GOOD), AS_OF)))
+
+    def test_linear_list_needs_a_project_name(self):
+        with self.assertRaises(SystemExit) as e:
+            self.audit_cli(str(FIXTURES / "acme-linear-projects.json"), "--source", "linear")
+        self.assertIn("--project", str(e.exception))
+        weak = self.audit_cli(str(FIXTURES / "acme-linear-projects.json"), "--source", "linear", "--project", "invoice chasing")
+        self.assertEqual(weak["verdict"], "hold")
+        self.assertFalse(weak["source"]["leader_report_reads_brief"])
+
+    def test_notion_page_takes_title_link_and_date_from_the_page_object(self):
+        text, src = sources.load("notion", GOOD, FIXTURES / "acme-notion-page.json")
+        self.assertEqual(src["title"], "Quote drafts from job notes")
+        self.assertEqual(src["updated_at"], "2026-11-21")
+        self.assertTrue(src["location"].startswith("https://www.notion.so/"))
+        self.assertEqual(text, GOOD.read_text(encoding="utf-8"))
+
+    def test_gdrive_file_takes_connector_field_names(self):
+        _, src = sources.load("gdrive", GOOD_HTML, FIXTURES / "acme-gdrive-file.json")
+        self.assertEqual((src["title"], src["updated_at"]), ("Quote drafts from job notes", "2026-11-22"))
+        self.assertIn("docs.google.com", src["location"])
+        report = self.audit_cli(str(GOOD_HTML), "--source", "gdrive", "--meta", str(FIXTURES / "acme-gdrive-file.json"))
+        self.assertEqual(report["verdict"], "pass")
+
+    def test_connector_json_with_content_field_is_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page.json"
+            page.write_text(json.dumps({"content": GOOD.read_text(encoding="utf-8")}), encoding="utf-8")
+            self.assertEqual(sources.load("notion", page)[0], GOOD.read_text(encoding="utf-8"))
+            page.write_text(json.dumps({"id": "x"}), encoding="utf-8")
+            with self.assertRaises(sources.SourceError):
+                sources.load("notion", page)
+
+
+class LoopRecord(unittest.TestCase):
+    def run_bet(self, folder: Path, spec: Path = GOOD, bet: str = "quote-drafting-assistant") -> dict:
+        with redirect_stdout(io.StringIO()):
+            sa.main(["audit", str(spec), "--as-of", "2026-11-26", "--bet", bet, "--landing", str(folder)])
+        return json.loads((folder / f"{bet}.json").read_text(encoding="utf-8"))
+
+    def test_new_record_gets_schema_bet_brief_and_spec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = self.run_bet(Path(tmp))
+        self.assertEqual(list(rec), ["schema", "bet", "brief", "spec"])
+        self.assertEqual(rec["schema"], "landing-loop/1")
+        self.assertEqual(rec["brief"]["sha256"], hashlib.sha256(GOOD.read_bytes()).hexdigest())
+        self.assertEqual(rec["spec"]["verdict"], "pass")
+
+    def test_only_the_spec_key_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            other = {"schema": "landing-loop/1", "bet": "quote-drafting-assistant", "brief": {"path": "x", "sha256": "y"}, "portfolio": {"rank": 1}, "evals": {"tasks": 400}, "spec": {"old": True}}
+            (folder / "quote-drafting-assistant.json").write_text(json.dumps(other), encoding="utf-8")
+            rec = self.run_bet(folder, WEAK)
+        for key in ("schema", "bet", "brief", "portfolio", "evals"):
+            self.assertEqual(rec[key], other[key], key)
+        self.assertEqual(rec["spec"]["verdict"], "hold")
+        self.assertNotIn("old", rec["spec"])
+
+    def test_every_figure_carries_value_unit_source_window_and_as_of(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = self.run_bet(Path(tmp))["spec"]
+        figures = [*spec["counts"].values(), *(spec["brief"][k] for k in ("bar", "tokens_per_task", "price_per_token"))]
+        for f in figures:
+            self.assertEqual(set(f), {"value", "unit", "source", "window", "as_of"})
+            self.assertEqual(set(f["window"]), {"from", "to"})
+            self.assertTrue(f["source"])
+        self.assertEqual((spec["brief"]["bar"]["value"], spec["brief"]["bar"]["unit"]), (60.0, "%"))
+        self.assertEqual(spec["brief"]["price_per_token"]["unit"], "USD per token")
+        self.assertIn("line 14", spec["brief"]["price_per_token"]["source"])
+
+    def test_no_status_word_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = json.dumps(self.run_bet(Path(tmp), WEAK)["spec"]).lower()
+        for word in ('"landed"', '"watch"', '"stalled"', '"status"'):
+            self.assertNotIn(word, text)
+
+    def test_refuses_a_record_for_another_bet_or_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "quote-drafting-assistant.json").write_text(json.dumps({"schema": "landing-loop/1", "bet": "other"}), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                self.run_bet(folder)
+            (folder / "quote-drafting-assistant.json").write_text(json.dumps({"schema": "v0", "bet": "quote-drafting-assistant"}), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                self.run_bet(folder)
+            with self.assertRaises(loop.LoopError):
+                loop.write(folder, "Bad Slug", {}, GOOD)
+
+    def test_bet_needs_as_of(self):
+        with self.assertRaises(SystemExit):
+            sa.main(["audit", str(GOOD), "--bet", "x"])
+
+
+class Html(unittest.TestCase):
+    def test_page_uses_the_leader_report_style_and_escapes_spec_text(self):
+        doc = sa.parse_text("# Spec\n\nOwner: <script>alert(1)</script>\n\n## Rollout\n\nEveryone.\n", "spec.md")
+        report = sa.audit(doc, AS_OF)
+        out = render.page(report, doc.lines, {"kind": "file", "title": "<b>x</b>", "location": "spec.md"})
+        self.assertIn("--brass:#E3A948", out)
+        self.assertIn('font-family:"Geist"', out)
+        self.assertNotIn("<script>alert", out)
+        self.assertNotIn("<b>x</b>", out)
+        self.assertNotIn("--landed)", out.split("</style>")[1])
+        self.assertIn('class="verdict hold"', out)
+
+    def test_out_writes_html_and_markdown_twin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with redirect_stdout(io.StringIO()):
+                sa.main(["audit", str(WEAK), "--as-of", "2026-11-26", "--out", tmp])
+            page = (Path(tmp) / "audit.html").read_text(encoding="utf-8")
+            md = (Path(tmp) / "audit.md").read_text(encoding="utf-8")
+            data = json.loads((Path(tmp) / "audit.json").read_text(encoding="utf-8"))
+        self.assertTrue(page.startswith("<!DOCTYPE html>"))
+        self.assertIn("The lines the holds cite", page)
+        self.assertIn("## Spec audit: **hold**", md)
+        self.assertEqual(data["verdict"], "hold")
+        for f in data["findings"]:
+            self.assertIn(f["check"], md)
 
 
 class Hygiene(unittest.TestCase):
