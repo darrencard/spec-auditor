@@ -14,18 +14,17 @@ Input: Markdown (.md), plain text (.txt), or an HTML export (.html, .htm) such a
 "HTML". HTML is turned into plain lines first; every line number refers to that text, which `text` prints.
 
 The checks, each run in code:
-  brief        a "Landing brief" block that the landing-brief skill accepts (scripts/landing_brief.py)
-  problem      the problem, in at least 6 words
-  good         the definition of good: a metric, a bar that is one number, which way is better, and a date
-  non-goals    at least one thing the work will not do
-  cost         the cost budget as two lines, tokens per task and price per token, each one number
+  brief        the landing brief, checked by the vendored parser (scripts/landing_brief.py) and nothing else: each
+               problem it lists (a missing problem, bar, date, non-goals or cost line, a bar that is not one number)
+               is one hold. Brief completeness has one owner in the Landing Loop; this script adds no list of its own
+  date         the brief's By date is not before --as-of
+  outcome      holds a bar on work shipped (features, releases); notes a bar on use (clicks, adoption)
   owner        a named person who owns the work or decides the next step, not a team or TBD
   rollout      a rollout plan with a stage (a percentage, a flag, a cohort, a pilot)
   rollback     a rollback plan with a trigger (a threshold: a number with a unit or a comparison) and a way back (a flag, a revert, an off switch)
   eval-plan    for an AI feature: an eval plan with a case count, a pass bar and when it runs
   placeholders no TBD, TODO, TBC, ??? or [insert ...] left in the spec
   certainty    notes forecasts stated as certain ("will increase", "guarantees"). Never holds.
-  outcome      holds a bar on work shipped (features, releases); notes a bar on use (clicks, adoption)
   guardrail    notes when no guardrail metric with a limit is named. Never holds.
   baseline     notes when the metric's current value is not stated. Never holds.
   assumptions  notes when no risks, assumptions or open questions are listed. Never holds.
@@ -69,10 +68,6 @@ ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 
 # Heading words for each part, matched against a heading's text in lower case.
 SECTIONS = {
-    "problem": ("problem", "the problem", "problem statement", "why", "background", "context"),
-    "good": ("definition of good", "success", "success metric", "success metrics", "success criteria", "goal", "goals", "metrics"),
-    "non_goals": ("non-goals", "non goals", "nongoals", "out of scope", "not in scope", "scope exclusions"),
-    "cost": ("cost budget", "cost", "costs", "budget", "unit economics"),
     "owner": ("owner", "owners", "ownership", "dri", "team", "people"),
     "rollout": ("rollout", "roll-out", "rollout plan", "launch plan", "release plan", "launch", "release"),
     "rollback": ("rollback", "roll back", "rollback plan", "kill switch", "off switch", "backout plan", "back-out plan"),  # voice-lint-disable-line
@@ -119,10 +114,7 @@ AI_WORDS = re.compile(
     re.I,
 )
 DOMAIN = re.compile(r"\b[\w-]+(?:\.[\w-]+)*\.ai\b", re.I)
-PROBLEM_KEYS = ("problem", "the problem", "problem statement", "problem it solves", "problem to solve", "why")
-GOOD_KEYS = ("success metric", "success metrics", "success criteria", "definition of good", "goal", "kpi", "north star")
 CERTAIN = re.compile(r"\bwill (?:increase|decrease|reduce|cut|double|triple|drive|grow|improve|lift|boost|eliminate)\b|\bguarantee[sd]?\b|\bdefinitely\b|\bcertain to\b", re.I)
-VAGUE_GOOD = re.compile(r"\b(?:improve|better|faster|easier|delight|world-class|more engaging)\b", re.I)
 # Text that reads as an instruction to whoever, or whatever, reviews the spec. Flagged as a note; it changes nothing.
 INSTRUCTION = re.compile(
     r"\b(?:ignore|disregard|skip|override)\b.{0,40}\b(?:rules?|checklist|checks?|instructions?|audit|above|previous)\b"
@@ -146,7 +138,6 @@ ACTIVITY_METRIC = re.compile(r"\b(?:generated|created|clicks?|page ?views?|sessi
 GUARDRAIL_KEYS = ("guardrail", "guardrails", "counter-metric", "counter metric", "must not get worse")
 BASELINE = re.compile(r"\b(?:today|currently|baseline|at present|as of now|now at|is now)\b[^.]{0,80}?\d|\d[^.]{0,60}\b(?:today|currently|baseline)\b", re.I)
 TESTED = re.compile(r"\b(?:test|tested|tests|validate[ds]?|interviews?|prototype|experiment|measure[sd]?|pilot|spike|check(?:ed)? by)\b", re.I)
-COMBINED_COST = re.compile(r"per task|per request|per call|a task|each task", re.I)
 
 
 class AuditError(ValueError):
@@ -314,127 +305,28 @@ def is_ai_feature(doc: Doc, brief: dict[str, tuple[int, str]]) -> tuple[bool, li
     return bool(hits), hits[:5]
 
 
-def check_brief(doc: Doc, start: int | None) -> Finding:
+def check_brief(doc: Doc, start: int | None, fields: dict[str, tuple[int, str]]) -> list[Finding]:
+    """Brief completeness is landing_brief.parse's call (Landing Loop contract, one owner per figure). Each problem the
+    parser lists becomes one finding, cited to the line of the part it names when that part is in the brief."""
     if start is None:
-        return Finding("brief", "hold", 'There is no "Landing brief" block.', [], 'Add a "## Landing brief" section with the five parts (see references/checklist.md).')
+        return [Finding("brief", "hold", 'There is no "Landing brief" block.', [], 'Add a "## Landing brief" section with the five parts (see references/checklist.md).')]
     try:
         landing_brief.parse("\n".join(doc.lines))
     except landing_brief.BriefError as e:
-        detail = str(e).replace("the landing brief cannot be used:", "").strip()
-        return Finding("brief", "hold", "The landing brief does not parse: " + re.sub(r"\s*\n\s*", " ", detail), [start], "Fix each part the message lists.")
-    return Finding("brief", "pass", "The landing brief parses, with every part present.", [start])
-
-
-def check_problem(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
-    if "problem" in brief:
-        n, text = brief["problem"]
-        lines = [n]
-    else:
-        sec = doc.section(SECTIONS["problem"])
-        keyed = [(n, v) for n, _, v in key_lines(doc, PROBLEM_KEYS) if v]
-        if keyed:
-            sec = (keyed[0][0], [keyed[0][0]])
-        if sec is None:
-            return Finding("problem", "hold", "No problem statement.", [], "State the problem in one or two sentences, in the customer's terms.")
-        lines, text = [sec[0], *sec[1][:3]], body_text(doc, sec[1])
-    words = len(re.findall(r"[A-Za-z']+", text))
-    if words < 6:
-        return Finding("problem", "hold", f"The problem is {words} words, too short to say whose problem it is.", lines, "Name who has the problem and what it costs them.")
-    return Finding("problem", "pass", f"Problem stated ({words} words).", lines)
-
-
-def check_good(doc: Doc, brief: dict[str, tuple[int, str]], as_of: datetime.date | None, parsed: landing_brief.Brief | None) -> list[Finding]:
-    parts = ("metric", "bar", "better", "by")
-    if parsed is not None:
-        # Brief completeness is landing_brief.parse's call (the Landing Loop contract): no check of its own here.
-        lines = [brief[p][0] for p in parts if p in brief]
-        better = "higher" if parsed.higher_is_better else "lower"
-        out = [Finding("good", "pass", f"Definition of good: {parsed.metric[:60]}, bar {parsed.bar_text}, {better} is better, by {parsed.by}.", lines)]
-        if as_of and datetime.date.fromisoformat(parsed.by) < as_of:
-            out.append(Finding("good", "hold", f"The date {parsed.by} is before {as_of.isoformat()}, so the bar cannot be met in time.", lines[-1:], "Set a date that is still ahead."))
+        out = []
+        problems = [x.strip() for x in str(e).splitlines()[1:] if x.strip()] or [str(e)]
+        for problem in problems:
+            named = [n for key, (n, _) in fields.items() if re.search(rf"\b{re.escape(key.replace('_', ' '))}\b", problem, re.I)]
+            out.append(Finding("brief", "hold", f"Landing brief: {problem}", named[:1] or [start], "Fix it in the brief (see references/checklist.md)."))
         return out
-    if any(p in brief for p in parts):
-        where = [brief[p][0] for p in parts if p in brief]
-        return [Finding("good", "hold", "The brief's definition of good is incomplete; the brief finding says which part.", where, "Fix the parts the brief finding lists.")]
-    sec = doc.section(SECTIONS["good"])
-    keyed = [(n, v) for n, _, v in key_lines(doc, GOOD_KEYS) if v]
-    if sec is None and keyed:
-        sec = (keyed[0][0], [keyed[0][0]])
-    if sec is None:
-        missing = [p for p in parts if p not in brief]
-        where = [brief[p][0] for p in parts if p in brief]
-        said = f" (the brief is missing {', '.join(missing)})" if where else ""
-        return [Finding("good", "hold", f"No definition of good{said}.", where, "Add Metric, Bar, Better and By to the landing brief.")]
-    head, body = sec
-    text = ISO_DATE.sub("", body_text(doc, body))
-    has_num = bool(NUM.search(text))
-    has_date = bool(ISO_DATE.search(body_text(doc, body)))
-    if has_num and has_date:
-        return [
-            Finding(
-                "good",
-                "note",
-                "Success is described with a number and a date, but not as a landing brief bar.",
-                sorted({head, *body[:4]}),
-                "Move it into the landing brief as Metric, Bar, Better and By.",
-            )
-        ]
-    vague = [n for n in body if VAGUE_GOOD.search(doc.line(n))]
-    lacks = " or ".join(x for x, ok in (("a number", has_num), ("a date", has_date)) if not ok)
-    return [
-        Finding(
-            "good",
-            "hold",
-            f"Success is described without {lacks}, so no one can say whether it landed.",
-            sorted({head, *(vague or body)[:4]}),
-            "Name one metric the team already measures, the bar, which way is better, and the date.",
-        )
-    ]
+    return [Finding("brief", "pass", "The landing brief parses, with every part present.", [start, *sorted(n for n, _ in fields.values())][:1])]
 
 
-def check_non_goals(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
-    if "non_goals" in brief:
-        n, value = brief["non_goals"]
-        if value.lower().strip(".") in ("none", "n/a", "-", "tbd"):
-            return Finding("non-goals", "hold", f'Non-goals is "{value}".', [n], "Name at least one thing this work will not do.")
-        return Finding("non-goals", "pass", "Non-goals stated.", [n])
-    sec = doc.section(SECTIONS["non_goals"])
-    if sec and sec[1]:
-        return Finding("non-goals", "pass", f"Non-goals stated ({len(sec[1])} lines).", [sec[0], *sec[1][:3]])
-    return Finding("non-goals", "hold", "No non-goals.", [sec[0]] if sec else [], "Name at least one thing this work will not do.")
-
-
-def check_cost(doc: Doc, brief: dict[str, tuple[int, str]], ai: bool, parsed: landing_brief.Brief | None) -> Finding:
-    if parsed is not None:
-        lines = [brief[k][0] for k in ("tokens_per_task", "price_per_token") if k in brief]
-        return Finding("cost", "pass", "Cost budget stated in the brief as two lines; cost-budget-check owns the figures.", lines)
-    if "tokens_per_task" in brief or "price_per_token" in brief:
-        where = [brief[k][0] for k in ("tokens_per_task", "price_per_token") if k in brief]
-        return Finding("cost", "hold", "The brief's cost budget is incomplete; the brief finding says which part.", where, "Fix the parts the brief finding lists.")
-    tokens = price = None
-    for n, key, value in key_lines(doc, ("tokens per task", "price per token")):
-        if key == "tokens per task" and tokens is None:
-            tokens = (n, value)
-        if key == "price per token" and price is None:
-            price = (n, value)
-    if tokens and price:
-        lines = [tokens[0], price[0]]
-        bad = [k for k, v in (("tokens per task", tokens[1]), ("price per token", price[1])) if v.lower() != "none" and landing_brief.number(v) is None]
-        if bad:
-            return Finding("cost", "hold", f"{' and '.join(bad).capitalize()} is not one number.", lines, "Write one number on each line, such as 9,000 and $0.000003.")
-        if ai and any(v.lower() == "none" for v in (tokens[1], price[1])):
-            return Finding("cost", "hold", "The cost budget is none, but this is an AI feature.", lines, "State tokens per task and price per token.")
-        return Finding("cost", "pass", f"Cost budget on two lines: {tokens[1]} tokens per task, {price[1]} per token.", lines)
-    one = [n for n, line in enumerate(doc.lines, 1) if re.search(r"tokens? per task", line, re.I) and re.search(r"per token", line, re.I)]
-    if one:
-        return Finding("cost", "hold", "Tokens per task and price per token are on one line.", one[:3], "State them as two lines.")
-    combined = [n for n, line in enumerate(doc.lines, 1) if COMBINED_COST.search(line) and NUM.search(line) and re.search(r"cost|[$£€]", line, re.I)]
-    if combined:
-        return Finding("cost", "hold", "The cost is one figure per task, not tokens per task and price per token.", combined[:3], "Split it into two lines: Tokens per task, and Price per token.")
-    sec = doc.section(SECTIONS["cost"])
-    if not ai:
-        return Finding("cost", "note", "No cost budget. Fine for fixed code; say so in the landing brief with none on both lines.", [sec[0]] if sec else [])
-    return Finding("cost", "hold", "No cost budget for an AI feature.", [sec[0]] if sec else [], "Add Tokens per task and Price per token as two lines.")
+def check_date(parsed: landing_brief.Brief, fields: dict[str, tuple[int, str]], as_of: datetime.date | None) -> Finding:
+    lines = [fields["by"][0]] if "by" in fields else []
+    if as_of and datetime.date.fromisoformat(parsed.by) < as_of:
+        return Finding("date", "hold", f"The brief's date {parsed.by} is before {as_of.isoformat()}, so the bar cannot be met in time.", lines, "Set a date that is still ahead.")
+    return Finding("date", "pass", f"The brief's date, {parsed.by}, is still ahead." if as_of else f"The brief's date is {parsed.by}; pass --as-of to check it is ahead.", lines)
 
 
 def check_owner(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
@@ -511,7 +403,7 @@ def check_certainty(doc: Doc) -> Finding:
 
 def check_outcome(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
     if "metric" not in brief:
-        return Finding("outcome", "pass", "No brief metric to classify; the good check holds on that.")
+        return Finding("outcome", "pass", "No brief metric to classify; the brief finding holds on that.")
     n, metric = brief["metric"]
     if OUTPUT_METRIC.search(metric):
         return Finding("outcome", "hold", f'The metric "{metric[:60]}" counts work shipped, not what changed for the customer.', [n], "Pick the customer or business result the work is meant to move.")
@@ -580,21 +472,17 @@ def audit(doc: Doc, as_of: datetime.date | None = None) -> dict:
         parsed = None
     ai, ai_lines = is_ai_feature(doc, brief)
     findings = [
-        check_brief(doc, start),
-        check_problem(doc, brief),
-        *check_good(doc, brief, as_of, parsed),
-        check_non_goals(doc, brief),
-        check_cost(doc, brief, ai, parsed),
+        *check_brief(doc, start, brief),
+        *([check_date(parsed, brief, as_of), check_outcome(doc, brief)] if parsed else []),
         check_owner(doc, brief),
         check_rollout(doc),
         check_rollback(doc),
         check_eval(doc, ai, ai_lines),
         check_placeholders(doc),
-        check_certainty(doc),
-        check_outcome(doc, brief),
         check_guardrail(doc),
         check_baseline(doc, brief),
         check_assumptions(doc),
+        check_certainty(doc),
         check_instructions(doc),
     ]
     holds = sum(f.result == "hold" for f in findings)

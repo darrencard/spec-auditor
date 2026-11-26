@@ -2,7 +2,7 @@
 
 Each check runs in `scripts/spec_audit.py`. A hold makes the verdict hold. A note never does. Examples use Acme, an invented company; every figure is illustrative.
 
-The checks look in the landing brief first. Where the brief does not hold a part, they look for a section with a matching heading (Markdown `#` headings, or a bold-only line, which is how many exports write headings).
+Whether the landing brief is complete is decided by `landing_brief.py` alone, the parser the whole Landing Loop shares; this skill adds no check of its own on the brief's parts. The other checks look at the rest of the spec, by section heading (Markdown `#` headings, or a bold-only line, which is how many exports write headings).
 
 ## brief
 
@@ -23,27 +23,11 @@ Passes when the spec has one `Landing brief` heading and `landing_brief.py` acce
 - **Decides the next step:** Maya Okafor, Group Product Manager
 ```
 
-Holds when the block is missing, a part is missing or repeated, or a line is not one of the parts.
+Holds when the block is missing, or on each problem the parser lists: a part missing, empty or repeated, a bar that is not one number, better not higher or lower, a date not YYYY-MM-DD, a cost line that is not one number, a cost of none on a model call, or a line that is not one of the parts. Each problem is its own hold, on the line of the part it names.
 
-## problem
+## date
 
-Passes with at least 6 words, from the brief's `Problem` or a section headed Problem, Background, Context or Why. Holds on "Late payment hurts."
-
-## good
-
-Passes when the brief has `Metric`, `Bar` (one number, such as 60%, $0.30 or 40h), `Better` (higher or lower) and `By` (YYYY-MM-DD). With `--as-of`, a `By` date before it holds.
-
-Without a brief, a Goals or Success section with a number and a date is a note (move it into the brief). Without a number or a date it holds: "Improve cash collection" cannot land or miss.
-
-## non-goals
-
-Passes with one or more lines, from the brief or a section headed Non-goals or Out of scope. Holds when missing, or when it says none or TBD.
-
-## cost
-
-Passes with `Tokens per task` and `Price per token` on two lines, each one number. Both may be `none` only when the line is fixed code.
-
-Holds on "Roughly $0.04 per task": one blended figure hides which of the two moved when the cost changes. Holds on both on one line, and on no budget for an AI feature.
+With `--as-of`, holds when the brief's `By` date is before it: the bar cannot be met in time.
 
 ## owner
 
@@ -55,7 +39,7 @@ Passes with a Rollout, Launch or Release section that names a stage: a percentag
 
 ## outcome
 
-Holds when the brief's metric counts work shipped: features, releases, launches, pull requests, story points, velocity. A bar of "12 features shipped" is met the day they ship, whether or not anything changed for the customer. A bar on use (drafts generated, clicks, active users, adoption) is a note: fine as a leading signal, weak as the bar. "Quotes sent within 2 hours of the visit" passes.
+Only when the brief parses. Holds when the brief's metric counts work shipped: features, releases, launches, pull requests, story points, velocity. A bar of "12 features shipped" is met the day they ship, whether or not anything changed for the customer. A bar on use (drafts generated, clicks, active users, adoption) is a note: fine as a leading signal, weak as the bar. "Quotes sent within 2 hours of the visit" passes.
 
 ## rollback
 

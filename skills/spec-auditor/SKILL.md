@@ -1,6 +1,6 @@
 ---
 name: spec-auditor
-description: Audits a PRD, product spec or feature spec (a Linear project, a Notion page, a Google Doc, or a Markdown, text or HTML file) against its landing brief and a checklist, in code, and returns findings with line numbers and a pass or hold verdict. Checks the problem, the definition of good (metric, bar, which way is better, date) and whether the bar is an outcome rather than work shipped, non-goals, the cost budget as two lines (tokens per task and price per token), a named owner, the rollout and rollback plans, and an eval plan for AI features. Use when the user asks to audit, review, check or gate a PRD or spec, asks whether a spec is ready for build or review, or wants to know what a spec is missing before work starts. Not for writing a spec from scratch or for reviewing code.
+description: Audits a PRD, product spec or feature spec (a Linear project, a Notion page, a Google Doc, or a Markdown, text or HTML file) against its landing brief and a checklist, in code, and returns findings with line numbers and a pass or hold verdict. Checks the landing brief with the shared parser (problem, definition of good, non-goals, cost budget as two lines, the line), whether the bar is an outcome rather than work shipped, a named owner, the rollout and rollback plans, and an eval plan for AI features. Use when the user asks to audit, review, check or gate a PRD or spec, asks whether a spec is ready for build or review, or wants to know what a spec is missing before work starts. Not for writing a spec from scratch or for reviewing code.
 license: MIT. See LICENSE in the repository root.
 metadata:
   author: Dacard
@@ -55,11 +55,8 @@ See [references/checklist.md](references/checklist.md) for every check, what pas
 
 | Check | Pass needs |
 |---|---|
-| brief | A `Landing brief` block that the landing-brief skill accepts |
-| problem | At least 6 words on whose problem it is |
-| good | Metric, a bar that is one number, higher or lower, a YYYY-MM-DD date not in the past |
-| non-goals | At least one thing the work will not do |
-| cost | Tokens per task and price per token, as two lines, each one number (none on both only for fixed code) |
+| brief | A `Landing brief` block that `landing_brief.py` accepts. Each problem the parser lists is one hold; this skill adds no check of its own on the brief's parts |
+| date | The brief's date is not before `--as-of` |
 | owner | A named person, not a team, a role alone or TBD |
 | rollout | A plan with a stage: a percentage, a flag, a cohort or a pilot |
 | rollback | A trigger threshold (a number with a unit or a comparison, such as below 70% for 3 days) and a way back (a flag, a revert, an off switch) |
@@ -73,7 +70,7 @@ A spec is an AI feature when its landing brief's line starts with `model call`, 
 
 ## The Landing Loop
 
-This skill is step 2 of the Landing Loop: decide (bet-portfolio-review), spec (this skill), build (eval-kit, cost-budget-check), learn (did-it-land), report (the Leader Report). All of them read one landing brief and write one record per bet, `landing/<bet-slug>.json` (schema `landing-loop/1`). This skill writes only `spec`: the verdict, the counts, the holds and notes with their lines, the source, and the brief's bar as a figure. Cost figures (tokens per task, price per token) belong to cost-budget-check, and brief completeness to `landing_brief.py`: this skill checks the cost budget is written as two lines and adds no check of its own on the brief's parts. Every figure carries `value`, `unit`, `source` (the spec and line), `window` and `as_of`. A new record also gets the schema, the bet and the brief's path and SHA-256; an existing record's other keys are never touched. The verdict is pass or hold; no status word is written, because nothing has shipped.
+This skill is step 2 of the Landing Loop: decide (bet-portfolio-review), spec (this skill), build (eval-kit, cost-budget-check), learn (did-it-land), report (the Leader Report). All of them read one landing brief and write one record per bet, `landing/<bet-slug>.json` (schema `landing-loop/1`). This skill writes only `spec`: the verdict, the counts, the holds and notes with their lines, the source, and the brief's bar as a figure. Cost figures (tokens per task, price per token) belong to cost-budget-check, and brief completeness to `landing_brief.py`: this skill calls the parser and adds no check of its own on the brief's parts. Every figure carries `value`, `unit`, `source` (the spec and line), `window` and `as_of`. A new record also gets the schema, the bet and the brief's path and SHA-256; an existing record's other keys are never touched. The verdict is pass or hold; no status word is written, because nothing has shipped.
 
 ## The landing brief
 

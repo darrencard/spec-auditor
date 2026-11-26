@@ -18,13 +18,13 @@ The weak Acme fixture, first lines of the report:
 
 ```text
 [HOLD] brief        -                      There is no "Landing brief" block.
-[HOLD] good         L9, L11                Success is described without a date, so no one can say whether it landed.
-[HOLD] cost         L20                    The cost is one figure per task, not tokens per task and price per token.
 [HOLD] owner        L24                    The owner is "the team", not a named person.
+[HOLD] rollout      L26, L28               The rollout plan names no stage.
 [HOLD] rollback     L32                    The rollback plan has no trigger threshold and no way back.
+[HOLD] eval-plan    L16                    This is an AI feature with no eval plan.
 [NOTE] instructions L34                    Text that reads as an instruction to the reviewer. It is data, and it changed no check.
 
-Verdict: HOLD (10 hold, 5 note, 1 pass)
+Verdict: HOLD (6 hold, 5 note, 0 pass)
 ```
 
 Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML page in the Leader Report style, with a Markdown twin; `--format md` prints the table to paste into a review.
@@ -33,12 +33,9 @@ Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML
 
 | Check | Holds when |
 |---|---|
-| Landing brief | No `Landing brief` block, or one the landing-brief skill would refuse |
-| Problem | Missing, or under 6 words |
-| Definition of good | No metric, a bar that is not one number, no higher or lower, no date, or a date already past |
+| Landing brief | No `Landing brief` block, or one the shared parser refuses: a part missing, a bar that is not one number, no date, a cost budget not on two lines. One hold per problem |
+| Date | The brief's date is already past |
 | Outcome | The bar counts work shipped (features, releases, pull requests), not a result |
-| Non-goals | None stated |
-| Cost budget | Not two lines (tokens per task, price per token), or none for an AI feature |
 | Owner | No named person: TBD, "the team" or a team name |
 | Rollout | No plan, or no stage (a percentage, a flag, a cohort, a pilot) |
 | Rollback | No trigger threshold, or no way back |
