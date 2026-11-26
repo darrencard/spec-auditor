@@ -215,7 +215,7 @@ def page(report: Json, lines: list[str], source: Json, brief: list[str] | None =
     body = "\n".join(
         [
             EXTRA_CSS,
-            '<div class="bar"><span class="count">Landing Loop · step 2 of 5</span><span class="count" id="count" hidden></span>'
+            '<div class="bar"><span class="count">Landing Loop · 02 Spec</span><span class="count" id="count" hidden></span>'
             '<label><input type="checkbox" id="g"> Show what each check needs</label></div>',
             notice,
             *slides,
