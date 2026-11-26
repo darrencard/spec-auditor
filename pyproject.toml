@@ -1,0 +1,17 @@
+[project]
+name = "spec-auditor"
+version = "0.1.0"
+description = "A skill that audits a PRD or spec against its landing brief and a checklist."
+requires-python = ">=3.11"
+# Standard library only, on purpose: the scripts run inside sandboxes that cannot install packages.
+dependencies = []
+
+[tool.ruff]
+line-length = 200
+target-version = "py311"
+# An unchanged copy from the landing-brief skill; its tests and lint live in that repository.
+extend-exclude = ["skills/spec-auditor/scripts/landing_brief.py"]
+
+[tool.ruff.lint]
+# E, F: errors and unused names. I: import order. B: likely bugs. UP: older syntax. SIM: needless complexity. S: security.
+select = ["E", "F", "I", "B", "UP", "SIM", "S"]
