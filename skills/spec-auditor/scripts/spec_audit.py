@@ -343,27 +343,19 @@ def check_problem(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
     return Finding("problem", "pass", f"Problem stated ({words} words).", lines)
 
 
-def check_good(doc: Doc, brief: dict[str, tuple[int, str]], as_of: datetime.date | None) -> list[Finding]:
+def check_good(doc: Doc, brief: dict[str, tuple[int, str]], as_of: datetime.date | None, parsed: landing_brief.Brief | None) -> list[Finding]:
     parts = ("metric", "bar", "better", "by")
-    if all(p in brief for p in parts):
-        lines = [brief[p][0] for p in parts]
-        problems = []
-        if landing_brief.number(brief["bar"][1]) is None:
-            problems.append(f'the bar "{brief["bar"][1][:40]}" is not one number')
-        if brief["better"][1].lower() not in ("higher", "lower"):
-            problems.append(f'better is "{brief["better"][1][:20]}", not higher or lower')
-        try:
-            by: datetime.date | None = datetime.date.fromisoformat(brief["by"][1])
-        except ValueError:
-            by = None
-            problems.append(f'the date "{brief["by"][1][:20]}" is not YYYY-MM-DD')
-        if problems:
-            return [Finding("good", "hold", "The definition of good is not checkable: " + "; ".join(problems) + ".", lines, "Write one metric, one number for the bar, higher or lower, and a date.")]
-        b = brief
-        out = [Finding("good", "pass", f"Definition of good: {b['metric'][1][:60]}, bar {b['bar'][1]}, {b['better'][1].lower()} is better, by {b['by'][1]}.", lines)]
-        if as_of and by and by < as_of:
-            out.append(Finding("good", "hold", f"The date {b['by'][1]} is before {as_of.isoformat()}, so the bar cannot be met in time.", [b["by"][0]], "Set a date that is still ahead."))
+    if parsed is not None:
+        # Brief completeness is landing_brief.parse's call (the Landing Loop contract): no check of its own here.
+        lines = [brief[p][0] for p in parts if p in brief]
+        better = "higher" if parsed.higher_is_better else "lower"
+        out = [Finding("good", "pass", f"Definition of good: {parsed.metric[:60]}, bar {parsed.bar_text}, {better} is better, by {parsed.by}.", lines)]
+        if as_of and datetime.date.fromisoformat(parsed.by) < as_of:
+            out.append(Finding("good", "hold", f"The date {parsed.by} is before {as_of.isoformat()}, so the bar cannot be met in time.", lines[-1:], "Set a date that is still ahead."))
         return out
+    if any(p in brief for p in parts):
+        where = [brief[p][0] for p in parts if p in brief]
+        return [Finding("good", "hold", "The brief's definition of good is incomplete; the brief finding says which part.", where, "Fix the parts the brief finding lists.")]
     sec = doc.section(SECTIONS["good"])
     keyed = [(n, v) for n, _, v in key_lines(doc, GOOD_KEYS) if v]
     if sec is None and keyed:
@@ -412,8 +404,14 @@ def check_non_goals(doc: Doc, brief: dict[str, tuple[int, str]]) -> Finding:
     return Finding("non-goals", "hold", "No non-goals.", [sec[0]] if sec else [], "Name at least one thing this work will not do.")
 
 
-def check_cost(doc: Doc, brief: dict[str, tuple[int, str]], ai: bool) -> Finding:
-    tokens, price = brief.get("tokens_per_task"), brief.get("price_per_token")
+def check_cost(doc: Doc, brief: dict[str, tuple[int, str]], ai: bool, parsed: landing_brief.Brief | None) -> Finding:
+    if parsed is not None:
+        lines = [brief[k][0] for k in ("tokens_per_task", "price_per_token") if k in brief]
+        return Finding("cost", "pass", "Cost budget stated in the brief as two lines; cost-budget-check owns the figures.", lines)
+    if "tokens_per_task" in brief or "price_per_token" in brief:
+        where = [brief[k][0] for k in ("tokens_per_task", "price_per_token") if k in brief]
+        return Finding("cost", "hold", "The brief's cost budget is incomplete; the brief finding says which part.", where, "Fix the parts the brief finding lists.")
+    tokens = price = None
     for n, key, value in key_lines(doc, ("tokens per task", "price per token")):
         if key == "tokens per task" and tokens is None:
             tokens = (n, value)
@@ -576,13 +574,17 @@ def check_instructions(doc: Doc) -> Finding:
 
 def audit(doc: Doc, as_of: datetime.date | None = None) -> dict:
     start, brief = brief_fields(doc)
+    try:
+        parsed = landing_brief.parse("\n".join(doc.lines)) if start else None
+    except landing_brief.BriefError:
+        parsed = None
     ai, ai_lines = is_ai_feature(doc, brief)
     findings = [
         check_brief(doc, start),
         check_problem(doc, brief),
-        *check_good(doc, brief, as_of),
+        *check_good(doc, brief, as_of, parsed),
         check_non_goals(doc, brief),
-        check_cost(doc, brief, ai),
+        check_cost(doc, brief, ai, parsed),
         check_owner(doc, brief),
         check_rollout(doc),
         check_rollback(doc),

@@ -457,14 +457,27 @@ class LoopRecord(unittest.TestCase):
     def test_every_figure_carries_value_unit_source_window_and_as_of(self):
         with tempfile.TemporaryDirectory() as tmp:
             spec = self.run_bet(Path(tmp))["spec"]
-        figures = [*spec["counts"].values(), *(spec["brief"][k] for k in ("bar", "tokens_per_task", "price_per_token"))]
-        for f in figures:
+        for f in [*spec["counts"].values(), spec["brief"]["bar"]]:
             self.assertEqual(set(f), {"value", "unit", "source", "window", "as_of"})
             self.assertEqual(set(f["window"]), {"from", "to"})
             self.assertTrue(f["source"])
         self.assertEqual((spec["brief"]["bar"]["value"], spec["brief"]["bar"]["unit"]), (60.0, "%"))
-        self.assertEqual(spec["brief"]["price_per_token"]["unit"], "USD per token")
-        self.assertIn("line 14", spec["brief"]["price_per_token"]["source"])
+        self.assertIn("line 9", spec["brief"]["bar"]["source"])
+
+    def test_cost_figures_are_left_to_cost_budget_check(self):
+        # The contract gives tokens per task and price per token one owner: cost-budget-check.
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = self.run_bet(Path(tmp))["spec"]
+        self.assertNotIn("tokens_per_task", spec["brief"])
+        self.assertNotIn("price_per_token", spec["brief"])
+
+    def test_brief_completeness_is_the_parsers_call(self):
+        # A brief the parser refuses holds once in brief; good and cost point at it rather than re-checking values.
+        report = run(BRIEF.replace("**Bar:** 70%", "**Bar:** much higher") + EVAL + ROLLOUT)
+        self.assertIn("not one number", finding(report, "brief")["message"])
+        self.assertIn("brief finding", finding(report, "good")["message"])
+        report = run(BRIEF.replace("4,000", "none") + EVAL + ROLLOUT)
+        self.assertIn("brief finding", finding(report, "cost")["message"])
 
     def test_no_status_word_is_written(self):
         with tempfile.TemporaryDirectory() as tmp:

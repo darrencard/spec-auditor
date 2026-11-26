@@ -33,7 +33,8 @@ def figure(value: float | int, unit: str, source: str, start: str, end: str, as_
 
 
 def brief_figures(text: str, where: str, lines: dict[str, int], as_of: str) -> Json:
-    """The brief's bar and cost budget as figures, each sourced to its line. Empty when the brief does not parse."""
+    """The brief's bar as a figure, sourced to its line. Empty when the brief does not parse. The cost budget is left
+    out on purpose: cost-budget-check owns tokens per task and price per token (contract, one owner per figure)."""
     try:
         b = landing_brief.parse(text)
     except landing_brief.BriefError:
@@ -50,18 +51,7 @@ def brief_figures(text: str, where: str, lines: dict[str, int], as_of: str) -> J
         "decides": b.decides,
         "bar": figure(b.bar, " ".join(x for x in (CURRENCY.get(b.prefix, b.prefix), b.unit) if x) or "number", src("bar"), as_of, b.by, as_of),
     }
-    if b.tokens_per_task is not None:
-        out["tokens_per_task"] = figure(b.tokens_per_task, "tokens per task", src("tokens_per_task"), as_of, b.by, as_of)
-    if b.price_per_token is not None:
-        mark = CURRENCY.get(_price_mark(text), "")
-        unit = f"{mark} per token" if mark else "per token"
-        out["price_per_token"] = figure(b.price_per_token, unit, src("price_per_token"), as_of, b.by, as_of)
     return out
-
-
-def _price_mark(text: str) -> str:
-    m = re.search(r"price per token\W*\s*([$£€])", text, re.I)
-    return m.group(1) if m else ""
 
 
 def spec_key(report: Json, source: Json, brief: Json, as_of: str) -> Json:
