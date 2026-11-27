@@ -4,7 +4,8 @@ The page is assets/template.html, vendored byte-identical from the Leader Report
 (brand mark, wordmark, contents), the bar, and the body. It follows that skill's references/design.md: scorecard rows,
 mono capital labels, hairlines, one frame for cards side by side, and the result word always printed beside its mark.
 Green, grey-white and red are kept for landed, watch and stalled, which only did-it-land computes, so this page does
-not use them: a hold is brass (the spec's owner owes a fix), a pass is ink, a note is a ring. Every piece of spec text
+not use them: a hold is a solid ink mark, a pass is ink, a note is a ring. Brass is kept for the owner's name.
+The template's green selection and focus ring are set to ink here. Every piece of spec text
 is escaped. Nothing here computes a figure; every count comes from the report.
 """
 
@@ -56,19 +57,21 @@ GROUPS = {"hold": "Hold: blocks the spec until it changes", "note": "Note: worth
 # Added inside the body, so the vendored template stays byte-identical. Result marks reuse the template's .st shape.
 EXTRA_CSS = """<style>
 .slide{min-height:0;padding-top:64px;padding-bottom:56px}
-.st.hold{color:var(--brass)}.st.pass{color:var(--t1)}.st.note{color:var(--t2)}
+::selection{background:var(--t1);color:var(--bg)}
+:focus-visible{outline-color:var(--t1)}
+.st.hold{color:var(--t1)}.st.pass{color:var(--t1)}.st.note{color:var(--t2)}
 .st.note::before{width:8px;height:8px;border-radius:50%;background:none;border:1.5px solid currentColor}
-.sc-r.hold .sc-n>span:first-child{color:var(--brass)}
+.sc-r.hold .sc-n>span:first-child{color:var(--t1)}
 .sc-q{display:block;font:400 12px/1.6 var(--mono);color:var(--t2);white-space:pre-wrap;word-break:break-word}
 .sc-q+.sc-q{margin-top:4px}
 .sc-f{display:block;font-size:12.5px;line-height:1.5;color:var(--t2);margin-top:8px}
-.sc-f::before{content:"FIX";font:400 10px/16px var(--mono);letter-spacing:.1em;color:var(--brass);margin-right:8px}
+.sc-f::before{content:"FIX";font:400 10px/16px var(--mono);letter-spacing:.1em;color:var(--t1);margin-right:8px}
 .sc-r .guide{grid-column:1/-1;margin-top:0}
 .sc .sc-g:nth-child(2){border-top:0;padding-top:20px}
 .vd{display:inline-flex;align-items:center;gap:10px;font:400 12px/20px var(--mono);letter-spacing:.12em;text-transform:uppercase}
 .vd{border:1px solid var(--line3);border-radius:4px;padding:4px 12px;color:var(--t1)}
-.vd.hold{color:var(--brass);border-color:var(--brass);background:var(--brass-bg)}
-.facts b.hold{color:var(--brass)}
+.vd.hold{color:var(--bg);border-color:var(--t1);background:var(--t1)}
+.facts b.hold{color:var(--t1)}
 .kv{display:grid;grid-template-columns:200px minmax(0,1fr) 96px;gap:8px 32px;align-items:baseline;border-top:1px solid var(--line);padding:16px 0;font-size:14px;color:var(--t1)}
 .kv:first-child{border-top:0;padding-top:4px}
 .kv .k{font:400 10px/20px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t3)}

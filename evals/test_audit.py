@@ -493,6 +493,12 @@ class Html(unittest.TestCase):
         self.assertNotIn("<b>x</b>", out)
         self.assertNotIn("--landed)", out.split("</style>")[1])
         self.assertIn('class="vd hold"', out)
+        css = out.split("</style>")[-2]
+        self.assertIn(".vd.hold{color:var(--bg);border-color:var(--t1);background:var(--t1)}", css)
+        self.assertIn(".st.hold{color:var(--t1)}", css)
+        self.assertNotIn("hold{color:var(--brass)", css, "a hold prints in ink; brass is for a person's call")
+        self.assertIn("::selection{background:var(--t1)", css)
+        self.assertIn(":focus-visible{outline-color:var(--t1)}", css)
         template = render.TEMPLATE.read_text(encoding="utf-8")
         self.assertTrue(out.startswith(template[: template.index("{{TITLE}}")]), "the page must be the vendored template with its slots filled")
         self.assertIn('<span translate="no">Dacard</span>', out)
