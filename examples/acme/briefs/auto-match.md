@@ -13,4 +13,4 @@ Illustrative sample brief for Acme, an invented company.
 - **Tokens per task:** 2,000
 - **Price per token:** $0.000003
 - **The line:** model call. Fuzzy matching of payee names calls a model; exact matches stay in fixed code.
-- **Decides the next step:** Head of Finance Product, Ledger squad
+- **Decides the next step:** Head of Product, Ledger squad
