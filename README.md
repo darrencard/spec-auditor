@@ -1,8 +1,8 @@
 # Spec auditor: hold specs that cannot land
 
-A free Claude skill that checks a PRD or spec against its landing brief and gives a pass or hold verdict, with line numbers, in under a second.
+A free Claude skill that checks a PRD or spec against its landing brief (a one-page plan: what good looks like, by when, at what cost) and gives a pass or hold verdict, with line numbers, in under a second.
 
-**Why it matters:** a spec without an outcome bar, a date, a cost budget or a rollback trigger cannot be checked after it ships. Code runs every check, so the verdict is the same on every run and the model cannot talk a weak spec into a pass.
+**Why it matters:** a spec without an outcome target, a date, a cost budget or a rollback trigger cannot be checked after it ships. Code runs every check, so the verdict is the same on every run and the model cannot talk a weak spec into a pass.
 
 ## Install
 
@@ -36,7 +36,7 @@ The weak Acme fixture, first lines of the report:
 Verdict: HOLD (6 hold, 5 note, 0 pass)
 ```
 
-Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML page in the Leader Report style and the Landing Loop's one visual family (the build plan drawn as a page, each check ticked at the lines it rests on), with a Markdown twin; `--format md` prints the table to paste into a review.
+Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML page in the Leader Report style and the Landing Loop's one visual family (a scorecard: the share of checks that pass, then one row per check, holds first, with its lines and HOLD, NOTE or PASS), with a Markdown twin; `--format md` prints the table to paste into a review.
 
 ## Sample
 
@@ -52,16 +52,16 @@ The briefs in `examples/acme/briefs/` are copies of the Landing Loop's canonical
 
 | Check | Holds when |
 |---|---|
-| Landing brief | No `Landing brief` block, or one the shared parser refuses: a part missing, a bar that is not one number, no date, a cost budget not on two lines. One hold per problem |
+| Landing brief | No `Landing brief` block, or one the shared parser refuses: a part missing, a target that is not one number, no date, a cost budget not on two lines. One hold per problem |
 | Date | The brief's date is already past |
-| Outcome | The bar counts work shipped (features, releases, pull requests), not a result |
+| Outcome | The target counts work shipped (features, releases, pull requests), not a result |
 | Owner | No named person: TBD, "the team" or a team name |
 | Rollout | No plan, or no stage (a percentage, a flag, a cohort, a pilot) |
 | Rollback | No trigger threshold, or no way back |
-| Eval plan | An AI feature with no case count, pass bar or time it runs |
+| Eval plan | An AI feature with no case count, pass mark or time it runs |
 | Placeholders | Any TBD, TODO, ??? or [insert ...] left |
 
-Notes, which never change the verdict: a bar on use rather than outcome, no guardrail metric with a limit, no current value for the metric, no risks or assumptions, forecasts stated as certain, and text addressed to the reviewer. Every check, with examples: [references/checklist.md](skills/spec-auditor/references/checklist.md).
+Notes, which never change the verdict: a target on use rather than outcome, no guardrail metric with a limit, no current value for the metric, no risks or assumptions, forecasts stated as certain, and text addressed to the reviewer. Every check, with examples: [references/checklist.md](skills/spec-auditor/references/checklist.md).
 
 ## Gate a pull request
 
@@ -73,7 +73,7 @@ Notes, which never change the verdict: a bar on use rather than outcome, no guar
 
 ## Part of the Landing Loop
 
-Step 02, Spec. Eleven skills, the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update) among them, share one landing brief: 01 Decide, 02 Spec, 03 Build, 04 Learn, 05 Report. `--bet <slug>` writes only the `spec` key of `landing/<slug>.json`, the record each step reads, and keeps every other key as it was. Every figure in it has a value, unit, source, window and date.
+Step 02, Spec. Eleven skills, the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update) among them, share one landing brief: 01 Decide, 02 Spec, 03 Build, 04 Learn, 05 Report. `--bet <slug>` writes only the `spec` key of `landing/<slug>.json`, the project file each step reads, and keeps every other key as it was. Every figure in it has a value, unit, source, window and date.
 
 ## How it works
 
@@ -84,6 +84,6 @@ Step 02, Spec. Eleven skills, the [Product & Technology Leader Report](https://g
 
 ## Status
 
-v0.3.2. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
+v0.3.3. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
 
 Claude and Claude Code are trademarks of Anthropic, PBC. These skills are independent and not affiliated with or endorsed by Anthropic.

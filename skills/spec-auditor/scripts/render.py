@@ -5,16 +5,18 @@ The page takes the whole stylesheet of assets/template.html (vendored byte-ident
 its picture with svgkit (scripts/vendor/svgkit.py, vendored byte-identical from landing-loop). Only a few rules for
 this page's layout are added.
 
-It reads top down for someone who has never seen the loop: the shared header, the verdict as the heading, the build
-plan drawn as a page outline with each check ticked down its edge at the lines it rests on (holds solid, with their
-line numbers), then one thing to do next. The findings follow as a scorecard, with the passes folded, then the
+It reads top down for someone who has never seen the loop: the shared header, the verdict as the heading, the
+checks as scorecard rows (a share bar of the checks that pass, then one row per check, holds first, with the lines it
+rests on and its result word), then one thing to do next. The findings follow as a scorecard, with the passes folded, then the
 landing brief beside the lines the holds cite. Check codes, file paths, flags and the record key sit in a fold for
 engineers. Public copy uses plain words: build plan, landing brief (defined at first use), target, quality tests,
 when to undo it, release stages.
 
 Green, grey-white and red are kept for landed, watch and stalled, which only did-it-land computes, so this page does
-not use them: a hold is solid ink, a pass is an outlined tick, a note is a ring. Brass is kept for the person who
-decides. The picture draws only figures the page prints, and its aria-label states the answer. Every piece of spec
+not use them: HOLD is a word in ink, NOTE and PASS muted, never a boxed chip. Brass is kept for the person who
+decides. The scorecard follows the scorecard grammar (svgkit 1.2.0): HTML rows split by hairlines, Geist Mono 12px for
+labels, figures and words, Geist 14px for names, a fixed-height share bar with no text in it. It draws only figures the
+page prints, and its aria-label states the answer. Every piece of spec
 text is escaped. Nothing here computes a figure; every count comes from the report.
 """
 
@@ -34,8 +36,6 @@ TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "template.html"
 STYLE = re.compile(r"<style>(.*?)</style>", re.S)
 NAME = "Spec auditor"  # the page prints its plain name; the code name sits in the engineers' fold
 MIN_FONT_PX = 11  # no text on the page prints smaller, at any width
-# The plan's own headings keep their words in the outline, with the plain gloss beside them.
-GLOSS = {"eval plan": "quality test plan", "rollout": "release stages", "rollback": "when you'd undo it"}
 ORDER = ("hold", "note", "pass")
 Json = dict[str, Any]
 NUMBER_WORDS = ("No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen")
@@ -124,13 +124,11 @@ main.solo{margin-left:0}
 .solo h1{font-size:clamp(34px,4.6vw,60px);line-height:1;letter-spacing:-.04em;max-width:22ch;margin-bottom:20px}
 .solo .lede{margin-bottom:28px}
 .solo .lede b{color:var(--t1);font-weight:500}
-.vd{display:inline-flex;align-items:center;gap:10px;font:400 12px/20px var(--mono);letter-spacing:.12em;text-transform:uppercase}
-.vd{border:1px solid var(--line3);border-radius:4px;padding:4px 12px;color:var(--t1)}
-.vd.hold{color:var(--bg);border-color:var(--t1);background:var(--t1)}
+.vd{font:500 12px/20px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--t2)}
+.vd.hold{color:var(--t1)}
 .kicker{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 18px;font-size:13.5px;color:var(--t2)}
-.cols{display:grid;grid-template-columns:minmax(0,640px) minmax(260px,1fr);gap:28px 48px;align-items:start}
-.cols.even{grid-template-columns:repeat(2,minmax(0,1fr))}
-.side{display:grid;gap:24px}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 48px;align-items:start}
+.cover .cols{margin-top:28px}
 .next{display:grid;gap:10px;border:1px solid var(--brass);border-radius:12px;padding:20px 22px;background:var(--brass-bg)}
 .next>b{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
 .next p{margin:0;font-size:16px;line-height:1.5;color:var(--t1)}
@@ -193,14 +191,6 @@ def refs(lines: list[int], file: str = "spec") -> str:
     return ("brief " if file == "brief" else "") + "L" + ", L".join(str(n) for n in lines)
 
 
-def where_words(lines: list[int], file: str = "spec") -> str:
-    """'lines 48 and 50 of the build plan': a line reference in plain words."""
-    if not lines:
-        return "the whole build plan"
-    what = "the landing brief" if file == "brief" else "the build plan"
-    return f"line{'s' if len(lines) > 1 else ''} {and_join([str(n) for n in lines])} of {what}"
-
-
 MARKUP = re.compile(r"^\s*(?:#{1,6}\s+|[-*+]\s+|\d+\.\s+)|\*\*|__|`")
 
 
@@ -237,13 +227,6 @@ def plain_title(text: str) -> str:
     return re.sub(r"^\s*PRDs?\b:?\s*", "Build plan: ", text)
 
 
-def heading_text(name: str) -> str:
-    """One of the plan's own headings as the outline prints it: its words, then the plain gloss for an internal one."""
-    name = plain_title(name)
-    gloss = GLOSS.get(name.strip().lower())
-    return f"{name} ({gloss})" if gloss else name
-
-
 def verdict_parts(report: Json) -> tuple[str, str]:
     """The heading (the verdict and how many checks hold) and the sentence that says what to do."""
     holds = [f for f in report["findings"] if f["result"] == "hold"]
@@ -269,124 +252,38 @@ def decider(brief: list[str] | None, spec: list[str]) -> str:
         return "the build plan's owner"
 
 
-# The signature picture: the build plan as a page outline, each check ticked down its edge.
+# The scorecard: one row per check, holds first, under a share bar of the checks that pass.
+
+WORDS_FOR = {"hold": ("hold", True), "note": ("note", False), "pass": ("pass", False)}
 
 
-def _mark(x: float, y: float, result: str, size: float = 16) -> str:
-    """A check's tick: hold is solid ink, pass an outlined tick, note a ring."""
-    if result == "note":
-        r = size / 2 - 1
-        return f'<circle cx="{sk.num(x + size / 2)}" cy="{sk.num(y + size / 2)}" r="{sk.num(r)}" fill="none" stroke="{sk.INK2}" stroke-width="{sk.num(sk.STROKE)}"/>'
-    return sk.gate(x, y, state="hold" if result == "hold" else "ready", size=size)
+def check_row(f: Json) -> str:
+    """One check: its name, the lines it rests on, and its result as a word (HOLD in ink, NOTE and PASS muted)."""
+    where = refs(f["lines"], f.get("file", "spec")) if f["lines"] else "whole plan"
+    word, ink = WORDS_FOR[f["result"]]
+    return sk.sc_row(LABELS.get(f["check"], f["check"]), figure=sk.figure_line(where), word=sk.check_word(word, ink=ink))
 
 
-def _fit(text: str, chars: int) -> str:
-    """As many whole words as fit, so a long heading is cut at a word, never mid-word."""
-    out = ""
-    for word in text.split():
-        if len(out) + len(word) + (1 if out else 0) > chars:
-            break
-        out = f"{out} {word}".strip()
-    return out or text[:chars]
-
-
-def _band(items: list[Json], x0: float, y: float, width: float, cols: int, title: str) -> tuple[str, float]:
-    """A row of ticks for checks that rest on the landing brief or on the whole plan."""
-    parts = [sk.label(x0, y, title)]
-    y += 12
-    col = width / cols
-    for i, f in enumerate(items):
-        cx, cy = x0 + (i % cols) * col, y + (i // cols) * 26
-        parts.append(_mark(cx, cy, f["result"]))
-        parts.append(sk.label(cx + 24, cy + 12, LABELS.get(f["check"], f["check"]), tone=sk.INK if f["result"] != "pass" else sk.INK2))
-    rows = (len(items) + cols - 1) // cols
-    return "".join(parts), y + rows * 26 + 8
-
-
-def outline(report: Json, lines: list[str], variant: str) -> str:
-    wide = variant == "wide"
-    width = 640.0 if wide else float(sk.TALL)
-    findings = report["findings"]
-    on_brief = [f for f in findings if f.get("file") == "brief" and f["lines"]]
-    on_spec = [f for f in findings if f.get("file", "spec") == "spec" and f["lines"]]
-    whole = [f for f in findings if not f["lines"]]
-    parts: list[str] = []
-    y = 14.0
-    if on_brief:
-        band, y = _band(on_brief, 0, y, width, 4 if wide else 2, "In the landing brief")
-        parts.append(band)
-    # The page: one faint stroke per written line, headings in ink, the lines a hold cites heavy.
-    sheet_w = 250.0 if wide else 110.0
-    step = 6.0
-    top = y + 14
-    parts.append(sk.label(0, y + 4, f"Build plan, {len(lines)} lines"))
-    held = {n for f in on_spec if f["result"] == "hold" for n in f["lines"]}
-    body = []
-    for n, text in enumerate(lines, 1):
-        t = text.strip()
-        if not t:
-            continue
-        ly = top + 10 + (n - 1) * step
-        if t.startswith("#"):
-            name = heading_text(MARKUP.sub("", t).strip())
-            if wide:
-                body.append(sk.label(12, ly + 4, _fit(name, int((sheet_w - 24) / sk.label_width("x"))), tone=sk.INK2))
-            else:
-                body.append(sk.rule(12, ly, 12 + min(sheet_w - 24, 30 + 3 * len(name)), ly, tone=sk.INK2, width=2.5))
-            continue
-        length = min(sheet_w - 24, 18 + len(t) * (sheet_w - 24) / 110)
-        heavy = n in held
-        body.append(sk.rule(12, ly, 12 + length, ly, tone=sk.INK if heavy else sk.LINE2, width=2.5 if heavy else 1))
-    sheet_h = 20 + len(lines) * step
-    # Ticks down the edge: each at the first line it cites, pushed down so labels never collide, with a leader back.
-    gx = sheet_w + (34 if wide else 18)
-    slots, last = [], top - 30.0
-    for f in sorted(on_spec, key=lambda f: (f["lines"][0], ORDER.index(f["result"]))):
-        anchor = top + 10 + (f["lines"][0] - 1) * step
-        sy = max(anchor - 8, last + 26)
-        tall = f["result"] == "hold" and not wide
-        slots.append((f, anchor, sy))
-        last = sy + (14 if tall else 0)
-    end = max([top + sheet_h] + [sy + 30 for _, _, sy in slots])
-    parts.append(
-        f'<rect x="0.75" y="{sk.num(top + 0.75)}" width="{sk.num(sheet_w - 1.5)}" height="{sk.num(end - top - 1.5)}" rx="4" fill="none" stroke="{sk.LINE3}" stroke-width="{sk.num(sk.STROKE)}"/>'
-    )
-    parts += body
-    for f, anchor, sy in slots:
-        hold = f["result"] == "hold"
-        parts.append(sk.rule(sheet_w - 6, anchor, gx - 6, sy + 8, tone=sk.INK if hold else sk.LINE3))
-        parts.append(_mark(gx, sy, f["result"]))
-        name = LABELS.get(f["check"], f["check"])
-        parts.append(sk.label(gx + 24, sy + 12, name, tone=sk.INK if f["result"] != "pass" else sk.INK2))
-        if hold:
-            where = refs(f["lines"])
-            if wide:
-                parts.append(sk.chip(gx + 34 + sk.label_width(name), sy - 1, f"Hold {where}", tone=sk.INK, filled=True))
-            else:
-                parts.append(sk.chip(gx + 24, sy + 17, f"Hold {where}", tone=sk.INK, filled=True))
-    y = end + 22
-    if whole:
-        band, y = _band(whole, 0, y, width, 4 if wide else 2, "Across the whole plan")
-        parts.append(band)
-    return sk.frame("".join(parts), label=outline_label(report, lines), height=y, width=width, variant=variant)
-
-
-def outline_label(report: Json, lines: list[str]) -> str:
-    """The picture's answer in one sentence."""
+def scorecard_frame(report: Json, illustrative: bool) -> str:
+    """The checks as scorecard rows: first the share that pass, then each check, holds first, then notes, then passes."""
     c = report["counts"]
-    holds = [f for f in report["findings"] if f["result"] == "hold"]
-    head = f"The build plan, {len(lines)} lines, with each check ticked at the lines it rests on"
-    if holds:
-        held = "; ".join(f"{LABELS.get(f['check'], f['check']).lower()} holds at {where_words(f['lines'], f.get('file', 'spec'))}" for f in holds)
-        return f"{head}: {held}. {count_word(c['note'])} note{'s' if c['note'] != 1 else ''} and {count_word(c['pass']).lower()} passes."
-    return f"{head}: nothing holds; {count_word(c['note']).lower()} note{'s' if c['note'] != 1 else ''} and {count_word(c['pass']).lower()} passes."
-
-
-CAPTION = (
-    "The build plan drawn as a page, one stroke per line, with its headings marked. Each check is ticked down the edge at the "
-    "first line it rests on: solid for a hold, with its line numbers, an outlined tick for a pass, a ring for a note. Checks on the "
-    "landing brief sit above the page; checks on the whole plan sit below it."
-)
+    total = c["hold"] + c["note"] + c["pass"]
+    verdict = report["verdict"]
+    share = sk.sc_row(
+        "All checks",
+        picture=sk.share_bar(c["pass"], total),
+        figure=sk.figure_line(f"{c['pass']} of {total} pass"),
+        word=sk.check_word(verdict, ink=verdict == "hold"),
+    )
+    rows = [check_row(f) for f in sorted(report["findings"], key=lambda f: ORDER.index(f["result"]))]
+    return sk.sc_frame(
+        [share, *rows],
+        label=verdict_line(report),
+        title="Checks",
+        head=["Check", "", "Lines", "Result"],
+        caption="The first row shows the share of checks that pass. Then one row per check, holds first: L is a line of the build plan, brief L a line of the landing brief.",
+        illustrative=illustrative,
+    )
 
 
 # Sections
@@ -475,7 +372,7 @@ def page(report: Json, lines: list[str], source: Json, brief: list[str] | None =
     )
     head, todo = verdict_parts(report)
     kicker = f'<p class="kicker"><span class="vd {esc(verdict)}">{esc(verdict)}</span><span>{esc(todo)}</span></p>'
-    pic = sk.figure(outline(report, lines, "wide"), outline(report, lines, "tall"), caption=CAPTION, illustrative=illustrative)
+    pic = scorecard_frame(report, illustrative)
     holds = [f for f in report["findings"] if f["result"] == "hold"]
     who = decider(brief, lines)
     if holds:
@@ -495,7 +392,7 @@ def page(report: Json, lines: list[str], source: Json, brief: list[str] | None =
         ("AI feature", "yes, so the quality tests are checked" if report["ai_feature"] else "no"),
     ]
     glance = '<dl class="figs">' + "".join(f"<div><dt>{k}</dt><dd>{v}</dd></div>" for k, v in facts) + "</dl>"
-    cover = f'<section class="slide cover">{header}<h1>{esc(head)}</h1>{kicker}<p class="lede">{lede}</p><div class="cols"><div>{pic}</div><div class="side">{nxt}{glance}</div></div></section>'
+    cover = f'<section class="slide cover">{header}<h1>{esc(head)}</h1>{kicker}<p class="lede">{lede}</p>{pic}<div class="cols">{nxt}{glance}</div></section>'
     passes = ""
     if c["pass"]:
         passes = f"<details><summary>{c['pass']} checks pass</summary>{scorecard(report, lines, brief, ('pass',))}</details>"
@@ -516,7 +413,7 @@ def page(report: Json, lines: list[str], source: Json, brief: list[str] | None =
     detail = f'<section class="slide"><div class="meta"><span>Detail</span></div>{engineers(report, source)}</section>'
     return (
         '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-        f'<title>{esc(f"{NAME}: {title}")}</title><style>{floor_fonts(stylesheet() + sk.CSS + PAGE_CSS)}</style></head><body><main class="solo">'
+        f'<title>{esc(f"{NAME}: {title}")}</title><style>{floor_fonts(stylesheet() + sk.CSS + sk.SCORECARD_CSS + PAGE_CSS)}</style></head><body><main class="solo">'
         f"{cover}{findings}{evidence}{detail}"
         f'<p class="foot">{NAME} {esc(report["version"])}. Every check runs in code; line numbers refer to the text as read. '
         "A pass means the build plan is complete enough to build against, not that the project will land.</p></main></body></html>\n"

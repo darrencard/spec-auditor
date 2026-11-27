@@ -508,7 +508,7 @@ class Html(unittest.TestCase):
         self.assertNotIn("--landed)", out.split("</style>")[1])
         self.assertIn('class="vd hold"', out)
         css = out.split("</style>")[-2]
-        self.assertIn(".vd.hold{color:var(--bg);border-color:var(--t1);background:var(--t1)}", css)
+        self.assertIn(".vd.hold{color:var(--t1)}", css, "the verdict is a word in ink, not a filled chip")
         self.assertIn(".st.hold{color:var(--t1)}", css)
         self.assertNotIn("hold{color:var(--brass)", css, "a hold prints in ink; brass is for a person's call")
         self.assertIn("::selection{background:var(--t1)", css)
@@ -561,31 +561,63 @@ class Page(unittest.TestCase):
         self.assertIn(":root{--ill:#74A5DA}", self.page)
 
     def test_the_visual_draws_only_figures_the_page_prints(self):
-        visuals = svgkit.visuals_in(self.page)
-        self.assertEqual(len(visuals), 2, "the outline, wide and tall")
         self.assertEqual(svgkit.unprinted(self.page), [])
-        for svg in visuals:
-            drawn = svgkit.texts_in(svg)
-            self.assertIn("HOLD L48, L50", drawn)
-            self.assertIn("HOLD L37, L39, L40", drawn)
-            self.assertEqual(svg.count('fill="var(--t1)"/>'), 2 + 0, "one solid mark per hold")
-            for f in self.report["findings"]:
-                self.assertIn(render.LABELS[f["check"]].upper(), drawn, f["check"])
+        self.assertEqual(len(svgkit.svgs_in(svgkit.frames_in(self.page)[0])), 1, "one share bar; the check rows have no picture")
+
+    def test_the_scorecard_is_one_frame_with_one_row_per_check_holds_first(self):
+        frames = svgkit.frames_in(self.page)
+        self.assertEqual(len(frames), 1, "one frame per visual")
+        frame = frames[0]
+        c = self.report["counts"]
+        self.assertEqual((c["pass"], c["hold"], c["note"]), (11, 2, 1))
+        self.assertEqual(frame.count('<div class="sc-r">'), len(self.report["findings"]) + 1, "the share row, then one row per check")
+        self.assertIn('<span class="sc-n">All checks</span><span class="sc-p"><svg class="sc-sh"', frame)
+        self.assertIn('<span class="sc-l"><b>11 of 14 pass</b></span>', frame)
+        words = re.findall(r'<span class="sc-s"><span class="(sc-w(?: ink)?)">(\w+)</span></span>', frame)[1:]
+        self.assertEqual([w for _, w in words], ["hold", "hold", "note"] + ["pass"] * 11, "holds first")
+        self.assertEqual({cls for cls, w in words if w == "hold"}, {"sc-w ink"})
+        self.assertEqual({cls for cls, w in words if w != "hold"}, {"sc-w"})
+        self.assertIn('<span class="sc-n">When to undo it</span><span class="sc-p"></span><span class="sc-l"><b>L48, L50</b></span>', frame)
+        self.assertIn('<span class="sc-n">Quality tests</span><span class="sc-p"></span><span class="sc-l"><b>L37, L39, L40</b></span>', frame)
+        for f in self.report["findings"]:
+            where = render.refs(f["lines"], f.get("file", "spec")) if f["lines"] else "whole plan"
+            self.assertIn(f'<span class="sc-l"><b>{where}</b></span>', frame, f["check"])
+
+    def test_no_text_inside_a_picture_and_no_picture_scales(self):
+        self.assertEqual(svgkit.svgs_with_text(self.page), [])
+        self.assertEqual(svgkit.scaled_svgs_in(self.page), [])
+
+    def test_labels_render_12px_and_names_14px(self):
+        css = self.page.split("<style>", 1)[1].split("</style>", 1)[0]
+        self.assertEqual(set(svgkit.font_sizes(css)), {"var(--sc-m)", "var(--sc-n)"})
+        self.assertIn("--sc-m:calc(12px / var(--sc-z))", css)
+        self.assertIn("--sc-n:calc(14px / var(--sc-z))", css)
+        self.assertIn(".scg{--sc-z:1;", css, "a sample page has no zoom")
+
+    def test_no_box_inside_the_scorecard_and_no_overlap(self):
+        css = self.page.split("<style>", 1)[1].split("</style>", 1)[0]
+        self.assertEqual(svgkit.boxes_in_frames(self.page, css), [])
+        self.assertNotIn('class="chip"', self.page.split("For your engineers", 1)[0])
+        self.assertNotIn("position:absolute", svgkit.SCORECARD_CSS)
+
+    def test_no_legacy_svgkit_primitive_draws_on_the_page(self):
+        import warnings
+
+        self.assertEqual(svgkit.legacy_in(self.page), [])
+        doc = sa.load(ROOT / "examples/acme/specs/quote-drafting.md")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            render.page(self.report, doc.lines, {"kind": "file", "location": "spec.md"}, illustrative=True)
 
     def test_no_status_colour(self):
         for word in ("landed", "stalled", "watch"):
             self.assertNotIn(f"var(--{word})", self.body)
             self.assertNotIn(f'class="st {word}"', self.body)
 
-    def test_each_visual_states_its_answer(self):
+    def test_the_scorecard_states_its_answer(self):
         labels = re.findall(r'role="img" aria-label="([^"]+)"', self.page)
-        self.assertEqual(len(labels), 2)
-        for label in labels:
-            self.assertEqual(
-                label,
-                "The build plan, 55 lines, with each check ticked at the lines it rests on: when to undo it holds at lines 48 and 50 of the build plan; "
-                "quality tests holds at lines 37, 39 and 40 of the build plan. One note and eleven passes.",
-            )
+        self.assertEqual(labels, [render.verdict_line(self.report)])
+        self.assertEqual(labels[0], "Hold: two checks stop this build plan. Set the number that triggers an undo and complete the quality test plan before build starts.")
 
     def test_public_copy_uses_plain_words(self):
         public = self.body.split("For your engineers", 1)[0]
@@ -628,16 +660,12 @@ class Page(unittest.TestCase):
         md = (ROOT / "examples" / "acme" / "spec-auditor.md").read_text(encoding="utf-8").split("For your engineers", 1)[0]
         self.assertIsNone(banned.search(md), "internal word in the Markdown twin")
 
-    def test_the_outline_glosses_the_plans_own_headings(self):
-        wide = svgkit.texts_in(svgkit.visuals_in(self.page)[0])
-        for drawn in ("EVAL PLAN (QUALITY TEST PLAN)", "ROLLOUT (RELEASE STAGES)", "ROLLBACK (WHEN YOU'D UNDO IT)"):
-            self.assertIn(drawn, wide)
-        self.assertEqual(render.heading_text("Who it is for"), "Who it is for")
+    def test_the_title_reads_build_plan(self):
         self.assertEqual(render.plain_title("PRD: Quote drafting assistant"), "Build plan: Quote drafting assistant")
 
     def test_svgkit_matches_its_landing_loop_pin(self):
         pin = json.loads((SCRIPTS / "VENDORED.json").read_text(encoding="utf-8"))["landing-loop"]
-        self.assertEqual(pin["commit"], "5d01756d08ab3eb92b457c3286729791df6bcf5f")
+        self.assertEqual(pin["commit"], "78784efd2ecd5282f6ec264e545ce2075e459be2")
         self.assertEqual(set(pin["files"]), {"scripts/vendor/svgkit.py"})
         for rel, info in pin["files"].items():
             digest = hashlib.sha256((SCRIPTS.parent / rel).read_bytes()).hexdigest()

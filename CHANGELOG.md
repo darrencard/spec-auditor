@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3 (2026-11-27)
+
+- The page's picture is now the scorecard, in the grammar of the outcome scorecard on dacard.ai/update: one frame of HTML rows split by hairlines. The first row is a share bar of the checks that pass ("11 of 14 pass", with the verdict word); then one row per check, holds first, then the note, then the passes, each with its line references as the figure and HOLD in ink or NOTE and PASS muted as text. Labels and words render 12px Geist Mono, names 14px Geist; no text in any SVG, no viewBox, no boxed chip. The page outline drawing (wide and tall SVGs) is gone.
+- The verdict above the lede is a word in ink, no longer a filled chip.
+- svgkit 1.2.0, vendored byte-identical from landing-loop 78784ef (the commit that last changed `tools/svgkit.py`; rollout recipe at c6c47e7) and pinned in `scripts/VENDORED.json`.
+- Tests copied from the rollout recipe: no text inside an SVG, no scaled picture, only the 12px and 14px sizes in the frame, no box in the frame and no chip before the engineers' fold, no legacy svgkit primitive (rendered with DeprecationWarning as an error), one frame with the share row and one row per check in order with each line reference printed exactly, the aria-label equal to the verdict, and nothing drawn that the page does not print.
+- Plain words in the README and SKILL.md: target (not bar), pass mark, the project file, and the landing brief defined once as a one-page plan: what good looks like, by when, at what cost. SKILL.md tells Claude to use the user's own word if they say bet. Keys, file names and flags (`--bet`) are unchanged.
+
 ## 0.3.2, 2026-11-27
 
 - The HTML page follows the Landing Loop sample anatomy, built like did-it-land's and eval-kit's: the shared header (mark, DACARD, skill, date, version, blue Illustrative tag) in place of the report's rail, an h1 verdict ("Hold: two checks stop this build plan."), the verdict mark with what to fix, the signature picture, one next step for the person the landing brief names (brass) and when, then the findings with the passes folded, and the landing brief beside the lines the holds cite. Check codes, files and flags fold under "For your engineers". No call to action: the page is the skill's own output.

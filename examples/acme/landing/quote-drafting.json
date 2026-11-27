@@ -3,7 +3,7 @@
   "bet": "quote-drafting",
   "spec": {
     "tool": "spec-auditor",
-    "version": "0.3.2",
+    "version": "0.3.3",
     "as_of": "2026-08-03",
     "source": {
       "kind": "file",
@@ -18,7 +18,7 @@
       "hold": {
         "value": 2,
         "unit": "findings",
-        "source": "spec-auditor 0.3.2, audit of examples/acme/specs/quote-drafting.md",
+        "source": "spec-auditor 0.3.3, audit of examples/acme/specs/quote-drafting.md",
         "window": {
           "from": "2026-08-03",
           "to": "2026-08-03"
@@ -28,7 +28,7 @@
       "note": {
         "value": 1,
         "unit": "findings",
-        "source": "spec-auditor 0.3.2, audit of examples/acme/specs/quote-drafting.md",
+        "source": "spec-auditor 0.3.3, audit of examples/acme/specs/quote-drafting.md",
         "window": {
           "from": "2026-08-03",
           "to": "2026-08-03"
@@ -38,7 +38,7 @@
       "pass": {
         "value": 11,
         "unit": "findings",
-        "source": "spec-auditor 0.3.2, audit of examples/acme/specs/quote-drafting.md",
+        "source": "spec-auditor 0.3.3, audit of examples/acme/specs/quote-drafting.md",
         "window": {
           "from": "2026-08-03",
           "to": "2026-08-03"
