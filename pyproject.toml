@@ -1,6 +1,6 @@
 [project]
 name = "spec-auditor"
-version = "0.3.3"
+version = "0.3.4"
 description = "A skill that audits a PRD or spec against its landing brief and a checklist."
 requires-python = ">=3.11"
 # Standard library only, on purpose: the scripts run inside sandboxes that cannot install packages.

@@ -124,14 +124,14 @@ PAGE_CSS = """
 main.solo{margin-left:0}
 .solo .slide{min-height:0}
 .solo .slide.cover{min-height:0;padding-top:40px;padding-bottom:48px;justify-content:flex-start}
-.solo h1{font-size:clamp(34px,4.6vw,60px);line-height:1;letter-spacing:-.04em;max-width:22ch;margin-bottom:20px}
+.solo h1{font-size:clamp(34px,4.6vw,60px);line-height:1;letter-spacing:-.04em;text-wrap:balance;margin-bottom:20px}
 .solo .lede{margin-bottom:28px}
 .solo .lede b{color:var(--t1);font-weight:500}
 .vd{font:500 12px/20px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--t2)}
 .vd.hold{color:var(--t1)}
 .kicker{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 18px;font-size:13.5px;color:var(--t2)}
 .cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 48px;align-items:start}
-.cover .cols{margin-top:28px}
+.cover .cols{margin-top:28px;grid-template-columns:minmax(0,1fr)}
 .next{display:grid;gap:10px;border:1px solid var(--brass);border-radius:12px;padding:20px 22px;background:var(--brass-bg)}
 .next>b{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
 .next p{margin:0;font-size:16px;line-height:1.5;color:var(--t1)}
@@ -159,7 +159,7 @@ main.solo{margin-left:0}
 .cite{display:grid;grid-template-columns:84px minmax(0,1fr);gap:16px;border-top:1px solid var(--line);padding:10px 0;font:400 12.5px/1.6 var(--mono);color:var(--t2)}
 .cite:first-child{border-top:0;padding-top:0}
 .cite b{font-weight:400;color:var(--t1);white-space:nowrap}
-.note{max-width:80ch;font-size:12.5px;line-height:1.6;color:var(--t2);margin:12px 0 0}
+.note{font-size:12.5px;line-height:1.6;color:var(--t2);margin:12px 0 0}
 .eng td{font-size:12px;vertical-align:top}
 h3.sub{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin:0 0 12px}
 .foot{max-width:1120px;margin:0 auto;padding:28px 40px 64px;color:var(--t3);font-size:12px}
@@ -169,6 +169,9 @@ h3.sub{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:upperca
 .scg .sc-l{text-transform:uppercase;letter-spacing:.06em}
 .scg .sc-hb{display:inline-block;width:120px}
 @container sc (min-width:800px){.scg .sc-r:has(>.sc-p:empty)>.sc-n{grid-column:1/3}.scg .sc-r:has(>.sc-p:empty)>.sc-p{display:none}}
+/* Full column (site rule since 2026-11-25): every title and text block runs the content column, the scorecard frame's width. */
+.solo h1,.solo h2,.solo h3,.solo .lede,.solo .next,.solo p,.solo li,.solo .sk figcaption{max-width:none}
+.solo h1{text-wrap:balance}.solo .lede,.solo p,.solo li,.solo .sk figcaption{text-wrap:pretty}
 """
 
 

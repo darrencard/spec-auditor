@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4 (2026-11-27)
+
+- Full column: the heading, the intro, the next step, section text and captions run the full width of the content column, the same width as the scorecard frame (the site's rule since 2026-11-25). The page's own CSS drops its caps on text (the heading's 22ch and the notes' 80ch) and overrides the vendored template's 62ch intro and svgkit's 76ch caption after their rules, so neither hash-pinned file changes. The next step runs the full column too, with the cover's figures under it in place of beside it. The heading balances its lines; text breaks with `text-wrap: pretty`. A test checks the page CSS caps no text and the sample carries the override.
+
 ## 0.3.3 (2026-11-27)
 
 - Scorecard fix round: a check row has no picture, so its name takes the picture column too and stays on one line; the share ("11 of 14 pass") prints once, in the frame head beside "Checks" with its bar, and the "All checks" row is gone, as /update does; the figure column prints in one case, numerals and capitals ("WHOLE PLAN", "BRIEF L5"), as /update. Tests for each.
