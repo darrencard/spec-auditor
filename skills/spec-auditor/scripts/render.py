@@ -116,7 +116,8 @@ WORDS = (
 # Layout for this page only, on top of the Leader Report stylesheet and svgkit.CSS, as did-it-land's page does.
 # The template paints selection and the focus ring green, a status colour; this page sets both to ink.
 # In the scorecard, a row with no picture gives its name the picture column too, so names stay on one line, and the
-# figure column prints in one case, numerals and capitals, as /update does.
+# figure column prints in one case, numerals and capitals, as /update does. The share that pass prints once, in the
+# frame head with its bar (.sc-hb), not again as a row.
 PAGE_CSS = """
 ::selection{background:var(--t1);color:var(--bg)}
 :focus-visible{outline-color:var(--t1)}
@@ -166,6 +167,7 @@ h3.sub{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:upperca
 @media (max-width:980px){.foot{padding:24px 16px 48px}.solo .slide.cover{padding-top:24px}.card{padding:18px 16px}.sc{padding:0}.sc-r{gap:10px;padding:16px 0}}
 @media (max-width:560px){.figs>div,.cite{grid-template-columns:1fr;gap:0}}
 .scg .sc-l{text-transform:uppercase;letter-spacing:.06em}
+.scg .sc-hb{display:inline-block;width:120px}
 @container sc (min-width:800px){.scg .sc-r:has(>.sc-p:empty)>.sc-n{grid-column:1/3}.scg .sc-r:has(>.sc-p:empty)>.sc-p{display:none}}
 """
 
@@ -269,24 +271,17 @@ def check_row(f: Json) -> str:
 
 
 def scorecard_frame(report: Json, illustrative: bool) -> str:
-    """The checks as scorecard rows: first the share that pass, then each check, holds first, then notes, then passes."""
+    """The checks as scorecard rows: the share that pass once, in the frame head with its bar; then each check, holds first, then notes, then passes."""
     c = report["counts"]
     total = c["hold"] + c["note"] + c["pass"]
-    verdict = report["verdict"]
-    share = sk.sc_row(
-        "All checks",
-        picture=sk.share_bar(c["pass"], total),
-        figure=sk.figure_line(f"{c['pass']} of {total} pass"),
-        word=sk.check_word(verdict, ink=verdict == "hold"),
-    )
     rows = [check_row(f) for f in sorted(report["findings"], key=lambda f: ORDER.index(f["result"]))]
     return sk.sc_frame(
-        [share, *rows],
+        rows,
         label=verdict_line(report),
         title="Checks",
-        legend=f"<span>{c['pass']} of {total} pass</span>",
+        legend=f'<span>{c["pass"]} of {total} pass</span><span class="sc-hb">{sk.share_bar(c["pass"], total)}</span>',
         head=["Check", "", "Lines", "Result"],
-        caption="The first row shows the share of checks that pass. Then one row per check, holds first: L is a line of the build plan, brief L a line of the landing brief.",
+        caption="The head shows the share of checks that pass. Then one row per check, holds first: L is a line of the build plan, brief L a line of the landing brief.",
         illustrative=illustrative,
     )
 

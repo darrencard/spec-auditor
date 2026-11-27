@@ -562,7 +562,7 @@ class Page(unittest.TestCase):
 
     def test_the_visual_draws_only_figures_the_page_prints(self):
         self.assertEqual(svgkit.unprinted(self.page), [])
-        self.assertEqual(len(svgkit.svgs_in(svgkit.frames_in(self.page)[0])), 1, "one share bar; the check rows have no picture")
+        self.assertEqual(len(svgkit.svgs_in(svgkit.frames_in(self.page)[0])), 1, "one share bar, in the head; the check rows have no picture")
 
     def test_the_scorecard_is_one_frame_with_one_row_per_check_holds_first(self):
         frames = svgkit.frames_in(self.page)
@@ -570,10 +570,8 @@ class Page(unittest.TestCase):
         frame = frames[0]
         c = self.report["counts"]
         self.assertEqual((c["pass"], c["hold"], c["note"]), (11, 2, 1))
-        self.assertEqual(frame.count('<div class="sc-r">'), len(self.report["findings"]) + 1, "the share row, then one row per check")
-        self.assertIn('<span class="sc-n">All checks</span><span class="sc-p"><svg class="sc-sh"', frame)
-        self.assertIn('<span class="sc-l"><b>11 of 14 pass</b></span>', frame)
-        words = re.findall(r'<span class="sc-s"><span class="(sc-w(?: ink)?)">(\w+)</span></span>', frame)[1:]
+        self.assertEqual(frame.count('<div class="sc-r">'), len(self.report["findings"]), "one row per check; the share prints in the head")
+        words = re.findall(r'<span class="sc-s"><span class="(sc-w(?: ink)?)">(\w+)</span></span>', frame)
         self.assertEqual([w for _, w in words], ["hold", "hold", "note"] + ["pass"] * 11, "holds first")
         self.assertEqual({cls for cls, w in words if w == "hold"}, {"sc-w ink"})
         self.assertEqual({cls for cls, w in words if w != "hold"}, {"sc-w"})
@@ -583,12 +581,13 @@ class Page(unittest.TestCase):
             where = render.refs(f["lines"], f.get("file", "spec")) if f["lines"] else "whole plan"
             self.assertIn(f'<span class="sc-l"><b>{where}</b></span>', frame, f["check"])
 
-    def test_the_share_prints_in_the_frame_head_and_stays_the_first_row(self):
+    def test_the_share_prints_once_in_the_frame_head_with_its_bar(self):
         frame = svgkit.frames_in(self.page)[0]
-        head = frame.split('<div class="sc-b">', 1)[0]
-        self.assertIn('<span>Checks</span><span>11 of 14 pass</span>', head)
-        rows = frame.split('<div class="sc-r">')
-        self.assertIn('<span class="sc-n">All checks</span><span class="sc-p"><svg class="sc-sh"', rows[1])
+        head, body = frame.split('<div class="sc-b">', 1)
+        self.assertIn('<span>Checks</span><span>11 of 14 pass</span><span class="sc-hb"><svg class="sc-sh"', head)
+        self.assertEqual(svgkit.page_text(frame).upper().count("11 OF 14 PASS"), 1, "the share prints once")
+        self.assertNotIn("All checks", frame)
+        self.assertNotIn('class="sc-sh"', body)
 
     def test_a_row_without_a_picture_gives_its_name_the_picture_column(self):
         css = self.page.split("<style>", 1)[1].split("</style>", 1)[0]
