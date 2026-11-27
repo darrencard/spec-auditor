@@ -36,11 +36,11 @@ The weak Acme fixture, first lines of the report:
 Verdict: HOLD (6 hold, 5 note, 0 pass)
 ```
 
-Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML page in the Leader Report style, with a Markdown twin; `--format md` prints the table to paste into a review.
+Each finding also prints a one-line fix. `--out DIR` writes the same as one HTML page in the Leader Report style and the Landing Loop's one visual family (the build plan drawn as a page, each check ticked at the lines it rests on), with a Markdown twin; `--format md` prints the table to paste into a review.
 
 ## Sample
 
-[examples/acme/spec-auditor.html](examples/acme/spec-auditor.html) audits the Acme quote-drafting PRD against its landing brief: a hold, because the rollback plan has no trigger threshold and the eval plan does not say when it runs. Acme is an invented company and every figure is illustrative. Regenerate the page, its Markdown twin and the `spec` key of `examples/acme/landing/quote-drafting.json` from the repository root:
+[examples/acme/spec-auditor.html](examples/acme/spec-auditor.html) audits the Acme quote-drafting PRD against its landing brief: a hold, because the plan for undoing it has no number that triggers the undo and the quality test plan does not say when the tests run. Acme is an invented company and every figure is illustrative. Regenerate the page, its Markdown twin and the `spec` key of `examples/acme/landing/quote-drafting.json` from the repository root:
 
 ```bash
 python3 skills/spec-auditor/scripts/spec_audit.py audit examples/acme/specs/quote-drafting.md --brief examples/acme/briefs/quote-drafting.md --as-of 2026-08-03 --illustrative --html examples/acme/spec-auditor.html --bet quote-drafting --landing examples/acme/landing
@@ -79,11 +79,11 @@ Step 02, Spec. Eleven skills, the [Product & Technology Leader Report](https://g
 
 - `spec_audit.py audit` runs every check in code and sets the verdict: hold if any finding holds.
 - `spec_audit.py quotes` rejects any note the model adds whose quote is not word for word on the line it cites, or whose numbers are not in that quote.
-- `landing_brief.py`, the Linear, Notion and Drive readers and the page template are unchanged copies from the Leader Report, pinned by commit and SHA-256 in `scripts/VENDORED.json`. A spec that passes has a brief the Report can read after launch.
+- `landing_brief.py`, the Linear, Notion and Drive readers and the page template's stylesheet are unchanged copies from the Leader Report, pinned by commit and SHA-256 in `scripts/VENDORED.json`, as is `scripts/vendor/svgkit.py` from landing-loop. A spec that passes has a brief the Report can read after launch.
 - Local only: standard library Python, no network calls.
 
 ## Status
 
-v0.3.1. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
+v0.3.2. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
 
 Claude and Claude Code are trademarks of Anthropic, PBC. These skills are independent and not affiliated with or endorsed by Anthropic.

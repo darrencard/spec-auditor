@@ -10,5 +10,13 @@
     "scripts/collect.py": {"from": "skills/product-engineering-update/scripts/collect.py", "sha256": "f58d3cd6db1fc7a5e73441618ed94460189aeb724be1c42934313d23d5bd93c4"},
     "scripts/convert.py": {"from": "skills/product-engineering-update/scripts/convert.py", "sha256": "f1d055c02e29c67690f3caac7b7eb3213afab20042ff78a8080ebf172b183a55"},
     "assets/template.html": {"from": "skills/product-engineering-update/assets/template.html", "sha256": "e5740431ab5269606709d352d3d253325df740830e8316f06478873e71d430d0"}
+  },
+  "landing-loop": {
+    "source": "https://github.com/darrencard/landing-loop",
+    "commit": "5d01756d08ab3eb92b457c3286729791df6bcf5f",
+    "note": "Copied unchanged from tools/svgkit.py (see tools/SVGKIT.md there). Never edit it here.",
+    "files": {
+      "scripts/vendor/svgkit.py": {"from": "tools/svgkit.py", "sha256": "8526cf100159a9e5a8958bba4ceb0373a7edc265f481d63795d1731a5999d054"}
+    }
   }
 }

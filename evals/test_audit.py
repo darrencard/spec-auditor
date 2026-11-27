@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import html as html_lib
 import io
 import json
 import re
@@ -22,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "spec-auditor" / "scripts"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(SCRIPTS / "vendor"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import landing_brief  # noqa: E402
@@ -29,6 +31,7 @@ import loop  # noqa: E402
 import render  # noqa: E402
 import sources  # noqa: E402
 import spec_audit as sa  # noqa: E402
+import svgkit  # noqa: E402
 
 AS_OF = datetime.date(2026, 11, 26)
 GOOD = FIXTURES / "acme-good-spec.md"
@@ -511,7 +514,8 @@ class Html(unittest.TestCase):
         self.assertIn("::selection{background:var(--t1)", css)
         self.assertIn(":focus-visible{outline-color:var(--t1)}", css)
         template = render.TEMPLATE.read_text(encoding="utf-8")
-        self.assertTrue(out.startswith(template[: template.index("{{TITLE}}")]), "the page must be the vendored template with its slots filled")
+        style = template[template.index("<style>") + len("<style>") : template.index("</style>")]
+        self.assertIn(style, out, "the page carries the vendored template's whole stylesheet")
         self.assertIn('<span translate="no">DACARD</span>', out)
         for word in ("hold", "note", "pass"):
             self.assertIn(f'<span class="st {word}">{word}</span>', out)
@@ -523,12 +527,86 @@ class Html(unittest.TestCase):
             page = (Path(tmp) / "audit.html").read_text(encoding="utf-8")
             md = (Path(tmp) / "audit.md").read_text(encoding="utf-8")
             data = json.loads((Path(tmp) / "audit.json").read_text(encoding="utf-8"))
-        self.assertTrue(page.startswith("<!DOCTYPE html>"))
+        self.assertTrue(page.startswith("<!doctype html>"))
         self.assertIn("The lines the holds cite", page)
         self.assertIn("## Spec audit: **hold**", md)
         self.assertEqual(data["verdict"], "hold")
         for f in data["findings"]:
             self.assertIn(f["check"], md)
+
+
+class Page(unittest.TestCase):
+    """The sample page follows the Landing Loop sample anatomy and draws in its one visual family."""
+
+    def setUp(self):
+        self.page = (ROOT / "examples" / "acme" / "spec-auditor.html").read_text(encoding="utf-8")
+        self.body = self.page.split("</style>", 1)[1]
+        self.report = sa.audit(sa.load(ROOT / "examples/acme/specs/quote-drafting.md"), datetime.date(2026, 8, 3), sa.load(ROOT / "examples/acme/briefs/quote-drafting.md"))
+
+    def test_the_page_follows_the_sample_anatomy(self):
+        body = self.body.split('<main class="solo">', 1)[1]
+        order = ['class="sk-hdr"', "<h1>", 'class="vd hold"', 'role="img"', "What to do next", "What stops the build plan", "The lines the holds cite", "For your engineers"]
+        at = [body.index(x) for x in order]
+        self.assertEqual(at, sorted(at))
+        self.assertEqual(body.count("<h1>"), 1)
+        self.assertIn("<h1>Hold: two checks stop this build plan.</h1>", body)
+        self.assertIn("<span>spec-auditor</span><span>Audit 2026-08-03</span><span>v" + sa.VERSION + "</span>", body, "the shared header")
+        self.assertIn('<span class="o"><i>Decides</i>Head of Product, Quoting squad</span><span class="d"><i>When</i>before build starts</span>', body)
+        self.assertEqual(body.count('<div class="next">'), 1)
+        self.assertIn("<details><summary>11 checks pass</summary>", body, "the passes fold")
+        self.assertNotIn("Book a call", body, "a sample is the skill's own output: no call to action")
+
+    def test_illustrative_tag_is_blue(self):
+        self.assertIn('<span class="sk-ill">Illustrative</span>', self.body)
+        self.assertIn(":root{--ill:#74A5DA}", self.page)
+
+    def test_the_visual_draws_only_figures_the_page_prints(self):
+        visuals = svgkit.visuals_in(self.page)
+        self.assertEqual(len(visuals), 2, "the outline, wide and tall")
+        self.assertEqual(svgkit.unprinted(self.page), [])
+        for svg in visuals:
+            drawn = svgkit.texts_in(svg)
+            self.assertIn("HOLD L48, L50", drawn)
+            self.assertIn("HOLD L37, L39, L40", drawn)
+            self.assertEqual(svg.count('fill="var(--t1)"/>'), 2 + 0, "one solid mark per hold")
+            for f in self.report["findings"]:
+                self.assertIn(render.LABELS[f["check"]].upper(), drawn, f["check"])
+
+    def test_no_status_colour(self):
+        for word in ("landed", "stalled", "watch"):
+            self.assertNotIn(f"var(--{word})", self.body)
+            self.assertNotIn(f'class="st {word}"', self.body)
+
+    def test_each_visual_states_its_answer(self):
+        labels = re.findall(r'role="img" aria-label="([^"]+)"', self.page)
+        self.assertEqual(len(labels), 2)
+        for label in labels:
+            self.assertEqual(
+                label,
+                "The build plan, 55 lines, with each check ticked at the lines it rests on: when to undo it holds at lines 48 and 50 of the build plan; "
+                "quality tests holds at lines 37, 39 and 40 of the build plan. One note and eleven passes.",
+            )
+
+    def test_public_copy_uses_plain_words(self):
+        public = self.body.split("For your engineers", 1)[0]
+        for svg in svgkit.svgs_in(public):
+            public = public.replace(svg, " ")
+        public = re.sub(r'<span class="sc-q">.*?</span>|<div class="cite">.*?</div>|<dd>[^<]*<span class="t3 mono">', " ", public)
+        text = html_lib.unescape(re.sub(r"<[^>]+>", " ", public)).lower()
+        for word in ("rollback", "rollout", "eval plan", " evals", "eval-plan", "the bar", "cohort", "spec's", ".json", "--fail"):
+            self.assertNotIn(word, text, word)
+        self.assertIn("<b>landing brief</b>, a one-page plan", self.body)
+        md = (ROOT / "examples" / "acme" / "spec-auditor.md").read_text(encoding="utf-8").split("For your engineers", 1)[0].lower()
+        for word in ("rollback", "eval plan", "eval-plan", "the bar"):
+            self.assertNotIn(word, md, word)
+
+    def test_svgkit_matches_its_landing_loop_pin(self):
+        pin = json.loads((SCRIPTS / "VENDORED.json").read_text(encoding="utf-8"))["landing-loop"]
+        self.assertEqual(pin["commit"], "5d01756d08ab3eb92b457c3286729791df6bcf5f")
+        self.assertEqual(set(pin["files"]), {"scripts/vendor/svgkit.py"})
+        for rel, info in pin["files"].items():
+            digest = hashlib.sha256((SCRIPTS.parent / rel).read_bytes()).hexdigest()
+            self.assertEqual(digest, info["sha256"], f"{rel} changed. Copy it again from landing-loop at the pinned commit and update VENDORED.json.")
 
 
 class Sample(unittest.TestCase):
