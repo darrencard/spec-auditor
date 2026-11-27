@@ -2,6 +2,8 @@
 
 A free Claude skill that checks a PRD or spec against its landing brief (a one-page plan: what good looks like, by when, at what cost) and gives a pass or hold verdict, with line numbers, in under a second.
 
+A bet is a project you expect to move a number; its bar is the target its landing brief sets.
+
 **Why it matters:** a spec without an outcome target, a date, a cost budget or a rollback trigger cannot be checked after it ships. Code runs every check, so the verdict is the same on every run and the model cannot talk a weak spec into a pass.
 
 ## Install
@@ -84,6 +86,6 @@ Step 02, Spec. Eleven skills, the [Product & Technology Leader Report](https://g
 
 ## Status
 
-v0.3.4. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
+v0.3.5. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
 
 Claude and Claude Code are trademarks of Anthropic, PBC. These skills are independent and not affiliated with or endorsed by Anthropic.

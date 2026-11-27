@@ -35,7 +35,7 @@ import svgkit as sk  # noqa: E402  (vendored, unchanged; see VENDORED.json)
 TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "template.html"
 STYLE = re.compile(r"<style>(.*?)</style>", re.S)
 NAME = "Spec auditor"  # the page prints its plain name; the code name sits in the engineers' fold
-MIN_FONT_PX = 11  # no text on the page prints smaller, at any width
+MIN_FONT_PX = 12  # no text on the page prints smaller, at any width
 ORDER = ("hold", "note", "pass")
 Json = dict[str, Any]
 NUMBER_WORDS = ("No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen")
@@ -231,6 +231,15 @@ def floor_fonts(css: str) -> str:
     return re.sub(r"font(?:-size)?:[^;}]*", raise_px, css)
 
 
+ISO_DATE = re.compile(r"(?<![\w-])\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?Z?)?(?![\w-])")
+
+
+def keep_dates(page: str) -> str:
+    """Every ISO date in the page's text held on one line, so a heading never breaks one at a hyphen at any width."""
+    head, sep, body = page.partition("<body>")
+    return head + sep + re.sub(r">([^<]+)<", lambda m: ">" + ISO_DATE.sub(r'<span class="nw">\g<0></span>', m.group(1)) + "<", body)
+
+
 def plain_title(text: str) -> str:
     """The plan's title in the page's words: a leading "PRD:" reads "Build plan:"."""
     return re.sub(r"^\s*PRDs?\b:?\s*", "Build plan: ", text)
@@ -414,7 +423,7 @@ def page(report: Json, lines: list[str], source: Json, brief: list[str] | None =
     right = f'<div><h3 class="sub">The lines the holds cite</h3><div class="card">{cites}</div></div>' if cites else ""
     evidence = f'<section class="slide"><div class="meta"><span>Evidence</span></div><h2>The plan and the lines</h2><div class="cols even">{left}{right}</div></section>' if left or right else ""
     detail = f'<section class="slide"><div class="meta"><span>Detail</span></div>{engineers(report, source)}</section>'
-    return (
+    return keep_dates(
         '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         f'<title>{esc(f"{NAME}: {title}")}</title><style>{floor_fonts(stylesheet() + sk.CSS + sk.SCORECARD_CSS + PAGE_CSS)}</style></head><body><main class="solo">'
         f"{cover}{findings}{evidence}{detail}"
