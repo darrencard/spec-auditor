@@ -29,7 +29,7 @@ Today 34% of quotes go out within 2 hours (illustrative, from the quoting events
 - A set of 400 real job notes from consenting pilot customers, with the line items the tradesperson finally sent as the reference.
 - Pass bar: 90% of draft line items match a sent line item, and 0 drafts include a price the price book does not hold.
 - Runs in CI on every prompt change or model change, and before each rollout stage.
-- Owner of the eval set: Quoting squad tech lead.
+- Owner of the eval set: Tech lead, Quoting squad.
 
 ## Guardrails
 
