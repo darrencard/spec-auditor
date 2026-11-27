@@ -73,7 +73,7 @@ Notes, which never change the verdict: a bar on use rather than outcome, no guar
 
 ## Part of the Landing Loop
 
-Step 02, Spec. Eleven skills share one landing brief with the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update): 01 Decide, 02 Spec, 03 Build, 04 Learn, 05 Report. `--bet <slug>` writes only the `spec` key of `landing/<slug>.json`, the record each step reads, and keeps every other key as it was. Every figure in it has a value, unit, source, window and date.
+Step 02, Spec. Eleven skills, the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update) among them, share one landing brief: 01 Decide, 02 Spec, 03 Build, 04 Learn, 05 Report. `--bet <slug>` writes only the `spec` key of `landing/<slug>.json`, the record each step reads, and keeps every other key as it was. Every figure in it has a value, unit, source, window and date.
 
 ## How it works
 

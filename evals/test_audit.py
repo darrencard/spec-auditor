@@ -512,7 +512,7 @@ class Html(unittest.TestCase):
         self.assertIn(":focus-visible{outline-color:var(--t1)}", css)
         template = render.TEMPLATE.read_text(encoding="utf-8")
         self.assertTrue(out.startswith(template[: template.index("{{TITLE}}")]), "the page must be the vendored template with its slots filled")
-        self.assertIn('<span translate="no">Dacard</span>', out)
+        self.assertIn('<span translate="no">DACARD</span>', out)
         for word in ("hold", "note", "pass"):
             self.assertIn(f'<span class="st {word}">{word}</span>', out)
 

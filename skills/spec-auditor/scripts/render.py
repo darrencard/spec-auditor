@@ -228,7 +228,7 @@ def page(report: Json, lines: list[str], source: Json, brief: list[str] | None =
     slots = (
         ("{{TITLE}}", esc(f"Spec audit: {title}")),
         ("{{DESCRIPTION}}", esc(f"spec-auditor {report['version']}: {verdict}, {c['hold']} hold, {c['note']} note, {c['pass']} pass.")),
-        ("{{BRAND}}", "Dacard"),
+        ("{{BRAND}}", "DACARD"),
         ("{{PRODUCT}}", "Spec auditor"),
         ("{{BODY}}", body),
     )
