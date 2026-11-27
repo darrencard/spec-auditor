@@ -2,6 +2,7 @@
 
 ## 0.3.3 (2026-11-27)
 
+- Scorecard fix round: a check row has no picture, so its name takes the picture column too and stays on one line; the share ("11 of 14 pass") prints in the frame head beside "Checks", with the share bar still the first row; the figure column prints in one case, numerals and capitals ("WHOLE PLAN", "BRIEF L5"), as /update. Tests for each.
 - The page's picture is now the scorecard, in the grammar of the outcome scorecard on dacard.ai/update: one frame of HTML rows split by hairlines. The first row is a share bar of the checks that pass ("11 of 14 pass", with the verdict word); then one row per check, holds first, then the note, then the passes, each with its line references as the figure and HOLD in ink or NOTE and PASS muted as text. Labels and words render 12px Geist Mono, names 14px Geist; no text in any SVG, no viewBox, no boxed chip. The page outline drawing (wide and tall SVGs) is gone.
 - The verdict above the lede is a word in ink, no longer a filled chip.
 - svgkit 1.2.0, vendored byte-identical from landing-loop 78784ef (the commit that last changed `tools/svgkit.py`; rollout recipe at c6c47e7) and pinned in `scripts/VENDORED.json`.

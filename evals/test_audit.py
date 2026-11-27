@@ -583,6 +583,21 @@ class Page(unittest.TestCase):
             where = render.refs(f["lines"], f.get("file", "spec")) if f["lines"] else "whole plan"
             self.assertIn(f'<span class="sc-l"><b>{where}</b></span>', frame, f["check"])
 
+    def test_the_share_prints_in_the_frame_head_and_stays_the_first_row(self):
+        frame = svgkit.frames_in(self.page)[0]
+        head = frame.split('<div class="sc-b">', 1)[0]
+        self.assertIn('<span>Checks</span><span>11 of 14 pass</span>', head)
+        rows = frame.split('<div class="sc-r">')
+        self.assertIn('<span class="sc-n">All checks</span><span class="sc-p"><svg class="sc-sh"', rows[1])
+
+    def test_a_row_without_a_picture_gives_its_name_the_picture_column(self):
+        css = self.page.split("<style>", 1)[1].split("</style>", 1)[0]
+        self.assertIn("@container sc (min-width:800px){.scg .sc-r:has(>.sc-p:empty)>.sc-n{grid-column:1/3}.scg .sc-r:has(>.sc-p:empty)>.sc-p{display:none}}", css)
+
+    def test_the_figure_column_prints_in_one_case(self):
+        css = self.page.split("<style>", 1)[1].split("</style>", 1)[0]
+        self.assertIn(".scg .sc-l{text-transform:uppercase;letter-spacing:.06em}", css)
+
     def test_no_text_inside_a_picture_and_no_picture_scales(self):
         self.assertEqual(svgkit.svgs_with_text(self.page), [])
         self.assertEqual(svgkit.scaled_svgs_in(self.page), [])

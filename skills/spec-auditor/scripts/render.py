@@ -115,6 +115,8 @@ WORDS = (
 
 # Layout for this page only, on top of the Leader Report stylesheet and svgkit.CSS, as did-it-land's page does.
 # The template paints selection and the focus ring green, a status colour; this page sets both to ink.
+# In the scorecard, a row with no picture gives its name the picture column too, so names stay on one line, and the
+# figure column prints in one case, numerals and capitals, as /update does.
 PAGE_CSS = """
 ::selection{background:var(--t1);color:var(--bg)}
 :focus-visible{outline-color:var(--t1)}
@@ -163,6 +165,8 @@ h3.sub{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:upperca
 @media (max-width:1100px){.cols,.cols.even{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:980px){.foot{padding:24px 16px 48px}.solo .slide.cover{padding-top:24px}.card{padding:18px 16px}.sc{padding:0}.sc-r{gap:10px;padding:16px 0}}
 @media (max-width:560px){.figs>div,.cite{grid-template-columns:1fr;gap:0}}
+.scg .sc-l{text-transform:uppercase;letter-spacing:.06em}
+@container sc (min-width:800px){.scg .sc-r:has(>.sc-p:empty)>.sc-n{grid-column:1/3}.scg .sc-r:has(>.sc-p:empty)>.sc-p{display:none}}
 """
 
 
@@ -280,6 +284,7 @@ def scorecard_frame(report: Json, illustrative: bool) -> str:
         [share, *rows],
         label=verdict_line(report),
         title="Checks",
+        legend=f"<span>{c['pass']} of {total} pass</span>",
         head=["Check", "", "Lines", "Result"],
         caption="The first row shows the share of checks that pass. Then one row per check, holds first: L is a line of the build plan, brief L a line of the landing brief.",
         illustrative=illustrative,
