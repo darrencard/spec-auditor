@@ -32,6 +32,10 @@ import svgkit as sk  # noqa: E402  (vendored, unchanged; see VENDORED.json)
 
 TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "template.html"
 STYLE = re.compile(r"<style>(.*?)</style>", re.S)
+NAME = "Spec auditor"  # the page prints its plain name; the code name sits in the engineers' fold
+MIN_FONT_PX = 11  # no text on the page prints smaller, at any width
+# The plan's own headings keep their words in the outline, with the plain gloss beside them.
+GLOSS = {"eval plan": "quality test plan", "rollout": "release stages", "rollback": "when you'd undo it"}
 ORDER = ("hold", "note", "pass")
 Json = dict[str, Any]
 NUMBER_WORDS = ("No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen")
@@ -128,15 +132,15 @@ main.solo{margin-left:0}
 .cols.even{grid-template-columns:repeat(2,minmax(0,1fr))}
 .side{display:grid;gap:24px}
 .next{display:grid;gap:10px;border:1px solid var(--brass);border-radius:12px;padding:20px 22px;background:var(--brass-bg)}
-.next>b{font:400 10px/16px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
+.next>b{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
 .next p{margin:0;font-size:16px;line-height:1.5;color:var(--t1)}
 .next p span{color:var(--t2)}
 .whom{display:flex;flex-wrap:wrap;gap:4px 24px;font:400 11.5px/18px var(--mono);color:var(--brass)}
-.whom i{font-style:normal;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-right:8px}
+.whom i{font-style:normal;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-right:8px}
 .whom .d{color:var(--t2)}
 .figs{margin:0;display:grid}
 .figs>div{display:grid;grid-template-columns:120px minmax(0,1fr);gap:4px 16px;border-top:1px solid var(--line);padding:10px 0}
-.figs dt{font:400 10px/22px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t3)}
+.figs dt{font:400 11px/22px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t3)}
 .figs dd{margin:0;font-size:13.5px;line-height:1.55;color:var(--t2)}
 .figs dd b{color:var(--t1);font-weight:500}
 .figs .own dd{color:var(--brass);font:400 12.5px/22px var(--mono)}
@@ -147,7 +151,7 @@ main.solo{margin-left:0}
 .sc-q{display:block;font:400 12px/1.6 var(--mono);color:var(--t2);white-space:pre-wrap;word-break:break-word}
 .sc-q+.sc-q{margin-top:4px}
 .sc-f{display:block;font-size:12.5px;line-height:1.5;color:var(--t2);margin-top:8px}
-.sc-f::before{content:"FIX";font:400 10px/16px var(--mono);letter-spacing:.1em;color:var(--t1);margin-right:8px}
+.sc-f::before{content:"FIX";font:400 11px/16px var(--mono);letter-spacing:.1em;color:var(--t1);margin-right:8px}
 .sc-r .rule{grid-column:1/-1;font-size:12px;color:var(--t3);margin:0}
 .solo details{margin-top:16px}
 .solo details>.card,.solo details>.tablewrap{margin-top:12px}
@@ -156,7 +160,7 @@ main.solo{margin-left:0}
 .cite b{font-weight:400;color:var(--t1);white-space:nowrap}
 .note{max-width:80ch;font-size:12.5px;line-height:1.6;color:var(--t2);margin:12px 0 0}
 .eng td{font-size:12px;vertical-align:top}
-h3.sub{font:400 10px/16px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin:0 0 12px}
+h3.sub{font:400 11px/16px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin:0 0 12px}
 .foot{max-width:1120px;margin:0 auto;padding:28px 40px 64px;color:var(--t3);font-size:12px}
 @media (max-width:1100px){.cols,.cols.even{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:980px){.foot{padding:24px 16px 48px}.solo .slide.cover{padding-top:24px}.card{padding:18px 16px}.sc{padding:0}.sc-r{gap:10px;padding:16px 0}}
@@ -216,6 +220,28 @@ def stylesheet() -> str:
     except OSError:
         found = None
     return found.group(1) if found else ""
+
+
+def floor_fonts(css: str) -> str:
+    """Every font size in the page's CSS at MIN_FONT_PX or more. The vendored template and svgkit stay byte-identical;
+    their smaller label sizes are raised here, as the page is written. A line height (after the slash) is left alone."""
+
+    def raise_px(decl: re.Match[str]) -> str:
+        return re.sub(r"(?<![/\d.])(\d+(?:\.\d+)?)px", lambda m: f"{MIN_FONT_PX}px" if float(m.group(1)) < MIN_FONT_PX else m.group(0), decl.group(0))
+
+    return re.sub(r"font(?:-size)?:[^;}]*", raise_px, css)
+
+
+def plain_title(text: str) -> str:
+    """The plan's title in the page's words: a leading "PRD:" reads "Build plan:"."""
+    return re.sub(r"^\s*PRDs?\b:?\s*", "Build plan: ", text)
+
+
+def heading_text(name: str) -> str:
+    """One of the plan's own headings as the outline prints it: its words, then the plain gloss for an internal one."""
+    name = plain_title(name)
+    gloss = GLOSS.get(name.strip().lower())
+    return f"{name} ({gloss})" if gloss else name
 
 
 def verdict_parts(report: Json) -> tuple[str, str]:
@@ -302,7 +328,7 @@ def outline(report: Json, lines: list[str], variant: str) -> str:
             continue
         ly = top + 10 + (n - 1) * step
         if t.startswith("#"):
-            name = MARKUP.sub("", t).strip()
+            name = heading_text(MARKUP.sub("", t).strip())
             if wide:
                 body.append(sk.label(12, ly + 4, _fit(name, int((sheet_w - 24) / sk.label_width("x"))), tone=sk.INK2))
             else:
@@ -428,7 +454,7 @@ def engineers(report: Json, source: Json) -> str:
     )
     where = source.get("location") or source.get("file") or report["spec"]
     note = (
-        f'<p class="note">spec-auditor {esc(report["version"])} read <code>{esc(where)}</code>'
+        f'<p class="note">Skill: <code>spec-auditor</code> {esc(report["version"])}. It read <code>{esc(where)}</code>'
         + (f" and the landing brief <code>{esc(report['brief'])}</code>" if report.get("brief") else "")
         + f". AI feature: {'yes' if report['ai_feature'] else 'no'}, so the quality test check {'applies' if report['ai_feature'] else 'does not apply'}. "
         "Line numbers refer to the text as read. With <code>--bet</code> and <code>--landing</code>, the audit adds its page to the project file: "
@@ -440,9 +466,9 @@ def engineers(report: Json, source: Json) -> str:
 
 def page(report: Json, lines: list[str], source: Json, brief: list[str] | None = None, illustrative: bool = False) -> str:
     c = report["counts"]
-    title = source.get("title") or Path(report["spec"]).name
+    title = plain_title(source.get("title") or Path(report["spec"]).name)
     verdict = report["verdict"]
-    header = sk.page_header("spec-auditor", date=f"Audit {report.get('as_of') or 'undated'}", version=f"v{report['version']}", illustrative=illustrative)
+    header = sk.page_header(NAME, date=f"Audit {report.get('as_of') or 'undated'}", version=f"v{report['version']}", illustrative=illustrative)
     lede = (
         f"{esc(title)}. The <b>build plan</b> is checked against its <b>landing brief</b>, a one-page plan: what good looks like, by when, "
         "at what cost. A hold must change before build starts; a note is worth fixing and never blocks."
@@ -490,9 +516,9 @@ def page(report: Json, lines: list[str], source: Json, brief: list[str] | None =
     detail = f'<section class="slide"><div class="meta"><span>Detail</span></div>{engineers(report, source)}</section>'
     return (
         '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-        f'<title>{esc(f"Spec audit: {title}")}</title><style>{stylesheet()}{sk.CSS}{PAGE_CSS}</style></head><body><main class="solo">'
+        f'<title>{esc(f"{NAME}: {title}")}</title><style>{floor_fonts(stylesheet() + sk.CSS + PAGE_CSS)}</style></head><body><main class="solo">'
         f"{cover}{findings}{evidence}{detail}"
-        f'<p class="foot">spec-auditor {esc(report["version"])}. Every check runs in code; line numbers refer to the text as read. '
+        f'<p class="foot">{NAME} {esc(report["version"])}. Every check runs in code; line numbers refer to the text as read. '
         "A pass means the build plan is complete enough to build against, not that the project will land.</p></main></body></html>\n"
     )
 

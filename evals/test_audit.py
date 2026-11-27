@@ -515,7 +515,7 @@ class Html(unittest.TestCase):
         self.assertIn(":focus-visible{outline-color:var(--t1)}", css)
         template = render.TEMPLATE.read_text(encoding="utf-8")
         style = template[template.index("<style>") + len("<style>") : template.index("</style>")]
-        self.assertIn(style, out, "the page carries the vendored template's whole stylesheet")
+        self.assertIn(render.floor_fonts(style), out, "the page carries the vendored template's whole stylesheet, its sizes raised to 11px")
         self.assertIn('<span translate="no">DACARD</span>', out)
         for word in ("hold", "note", "pass"):
             self.assertIn(f'<span class="st {word}">{word}</span>', out)
@@ -550,7 +550,7 @@ class Page(unittest.TestCase):
         self.assertEqual(at, sorted(at))
         self.assertEqual(body.count("<h1>"), 1)
         self.assertIn("<h1>Hold: two checks stop this build plan.</h1>", body)
-        self.assertIn("<span>spec-auditor</span><span>Audit 2026-08-03</span><span>v" + sa.VERSION + "</span>", body, "the shared header")
+        self.assertIn("<span>Spec auditor</span><span>Audit 2026-08-03</span><span>v" + sa.VERSION + "</span>", body, "the shared header")
         self.assertIn('<span class="o"><i>Decides</i>Head of Product, Quoting squad</span><span class="d"><i>When</i>before build starts</span>', body)
         self.assertEqual(body.count('<div class="next">'), 1)
         self.assertIn("<details><summary>11 checks pass</summary>", body, "the passes fold")
@@ -599,6 +599,41 @@ class Page(unittest.TestCase):
         md = (ROOT / "examples" / "acme" / "spec-auditor.md").read_text(encoding="utf-8").split("For your engineers", 1)[0].lower()
         for word in ("rollback", "eval plan", "eval-plan", "the bar"):
             self.assertNotIn(word, md, word)
+
+    def test_no_text_smaller_than_11px(self):
+        css = "".join(re.findall(r"<style>(.*?)</style>", self.page, re.S))
+        decls = re.findall(r"font(?:-size)?:[^;}]*", css)
+        self.assertTrue(decls)
+        sizes = [float(n) for d in decls for n in re.findall(r"(?<![/\d.])(\d+(?:\.\d+)?)px", d)]
+        self.assertGreaterEqual(min(sizes), 11, "a font size below 11px")
+        self.assertNotRegex(self.page, r'font-size="(\d|10)(\.\d+)?"', "an SVG label below 11px")
+        template = (SCRIPTS.parent / "assets" / "template.html").read_text(encoding="utf-8")
+        self.assertIn("font:400 10px/16px var(--mono)", template, "the template stays as vendored; the page raises its sizes")
+
+    def test_header_prints_the_plain_name_and_the_fold_the_code_name(self):
+        header = re.search(r'<header class="sk-hdr">.*?</header>', self.page, re.S).group(0)
+        self.assertNotIn("spec-auditor", header)
+        public = self.body.split("<summary>For your engineers</summary>", 1)
+        self.assertNotIn("spec-auditor", public[0])
+        self.assertIn(f"Skill: <code>spec-auditor</code> {sa.VERSION}.", public[1])
+        self.assertIn("<title>Spec auditor: Build plan: Quote drafting assistant</title>", self.page)
+
+    def test_no_internal_words_in_public_copy(self):
+        banned = re.compile(r"\b(records?|bets?|the bar|PRDs?|ARR|tokens?)\b", re.I)
+        public = re.sub(r"<details><summary>For your engineers</summary>.*?</details>", " ", self.body, flags=re.S)
+        self.assertIsNone(banned.search(svgkit.page_text(public)), "internal word on the page")
+        for svg in svgkit.visuals_in(self.page):
+            self.assertIsNone(banned.search(" ".join(svgkit.texts_in(svg))), "internal word in the picture")
+        self.assertIn("Build plan: Quote drafting assistant. The <b>build plan</b>", self.body)
+        md = (ROOT / "examples" / "acme" / "spec-auditor.md").read_text(encoding="utf-8").split("For your engineers", 1)[0]
+        self.assertIsNone(banned.search(md), "internal word in the Markdown twin")
+
+    def test_the_outline_glosses_the_plans_own_headings(self):
+        wide = svgkit.texts_in(svgkit.visuals_in(self.page)[0])
+        for drawn in ("EVAL PLAN (QUALITY TEST PLAN)", "ROLLOUT (RELEASE STAGES)", "ROLLBACK (WHEN YOU'D UNDO IT)"):
+            self.assertIn(drawn, wide)
+        self.assertEqual(render.heading_text("Who it is for"), "Who it is for")
+        self.assertEqual(render.plain_title("PRD: Quote drafting assistant"), "Build plan: Quote drafting assistant")
 
     def test_svgkit_matches_its_landing_loop_pin(self):
         pin = json.loads((SCRIPTS / "VENDORED.json").read_text(encoding="utf-8"))["landing-loop"]
