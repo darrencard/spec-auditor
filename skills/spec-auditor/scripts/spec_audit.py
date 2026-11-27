@@ -41,11 +41,15 @@ This script reads files and prints text. It makes no network calls. Standard lib
 
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 11):  # noqa: UP036  (checked first, before anything is read or written)
+    raise SystemExit("spec_audit: needs Python 3.11 or later; try python3.12.")
+
 import argparse
 import datetime
 import json
 import re
-import sys
 from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path

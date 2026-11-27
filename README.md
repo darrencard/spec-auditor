@@ -19,7 +19,7 @@ Standalone, paste this into Claude Code:
 Install the spec-auditor skill from https://github.com/darrencard/spec-auditor: clone it, copy skills/spec-auditor into ~/.claude/skills/, and run python3 -m unittest discover -s evals to check it. Then audit my spec at PATH with today's date as --as-of, show me the report as printed, and quote the spec word for word for anything you add.
 ```
 
-Replace `PATH` with the spec. With a Linear, Notion or Google Drive connector in the session, name the doc instead and Claude fetches it; otherwise use a Markdown, text or HTML file. Needs Python 3.11 or later; nothing else to install.
+Replace `PATH` with the spec. With a Linear, Notion or Google Drive connector in the session, name the doc instead and Claude fetches it; otherwise use a Markdown, text or HTML file. Needs Python 3.11 or later (macOS python3 is often 3.9, so try python3.12; the script says so and stops on anything older). Nothing else to install.
 
 ## What you get
 

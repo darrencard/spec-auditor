@@ -9,6 +9,7 @@ import datetime
 import hashlib
 import io
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -480,6 +481,16 @@ class LoopRecord(unittest.TestCase):
     def test_bet_needs_as_of(self):
         with self.assertRaises(SystemExit):
             sa.main(["audit", str(GOOD), "--bet", "x"])
+
+
+class PythonFloor(unittest.TestCase):
+    def test_the_entry_script_checks_the_version_before_anything_else(self):
+        text = Path(sa.__file__).read_text(encoding="utf-8")
+        body = text[text.index("from __future__ import annotations") :]
+        guard = body.index("if sys.version_info < (3, 11):")
+        self.assertIn("needs Python 3.11 or later; try python3.12", body)
+        first_other_import = re.search(r"^(import (?!sys\b)|from (?!__future__))", body, re.M).start()
+        self.assertLess(guard, first_other_import)
 
 
 class Html(unittest.TestCase):
