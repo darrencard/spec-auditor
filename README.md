@@ -4,7 +4,16 @@ A free Claude skill that checks a PRD or spec against its landing brief and give
 
 **Why it matters:** a spec without an outcome bar, a date, a cost budget or a rollback trigger cannot be checked after it ships. Code runs every check, so the verdict is the same on every run and the model cannot talk a weak spec into a pass.
 
-## Install: paste one prompt into Claude Code
+## Install
+
+In Claude Code:
+
+```text
+/plugin marketplace add darrencard/landing-loop
+/plugin install spec-auditor@landing-loop
+```
+
+Standalone, paste this into Claude Code:
 
 ```text
 Install the spec-auditor skill from https://github.com/darrencard/spec-auditor: clone it, copy skills/spec-auditor into ~/.claude/skills/, and run python3 -m unittest discover -s evals to check it. Then audit my spec at PATH with today's date as --as-of, show me the report as printed, and quote the spec word for word for anything you add.
@@ -64,7 +73,7 @@ Notes, which never change the verdict: a bar on use rather than outcome, no guar
 
 ## Part of the Landing Loop
 
-Step 02, Spec. Five skills share one landing brief with the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update): 01 Decide, 02 Spec, 03 Build, 04 Learn, 05 Report. `--bet <slug>` writes only the `spec` key of `landing/<slug>.json`, the record each step reads, and keeps every other key as it was. Every figure in it has a value, unit, source, window and date.
+Step 02, Spec. Eleven skills share one landing brief with the [Product & Technology Leader Report](https://github.com/darrencard/product-engineering-update): 01 Decide, 02 Spec, 03 Build, 04 Learn, 05 Report. `--bet <slug>` writes only the `spec` key of `landing/<slug>.json`, the record each step reads, and keeps every other key as it was. Every figure in it has a value, unit, source, window and date.
 
 ## How it works
 
@@ -75,4 +84,6 @@ Step 02, Spec. Five skills share one landing brief with the [Product & Technolog
 
 ## Status
 
-v0.3.0. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
+v0.3.1. Tested on the Acme fixtures in `evals/` (Acme is an invented company; every figure is illustrative) and run once on 3 real internal specs, which cut 5 false holds from the keyword checks. Not yet run on another team's specs. Reads Markdown, plain text and HTML exports; not `.docx` or PDF. MIT licensed.
+
+Claude and Claude Code are trademarks of Anthropic, PBC. These skills are independent and not affiliated with or endorsed by Anthropic.

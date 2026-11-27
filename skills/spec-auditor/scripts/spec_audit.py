@@ -56,7 +56,7 @@ import loop  # noqa: E402
 import render  # noqa: E402
 import sources  # noqa: E402
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 # A spec is tens of pages at most. Anything larger is not one.
 MAX_CHARS = 400_000
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")

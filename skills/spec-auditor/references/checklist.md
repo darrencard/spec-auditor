@@ -20,7 +20,7 @@ Passes when the spec has one `Landing brief` heading and `landing_brief.py` acce
 - **Tokens per task:** 9,000
 - **Price per token:** $0.000003
 - **The line:** model call. Totals and tax stay in fixed code.
-- **Decides the next step:** Maya Okafor, Group Product Manager
+- **Decides the next step:** Head of Product, Quoting squad
 ```
 
 Holds when the block is missing, or on each problem the parser lists: a part missing, empty or repeated, a bar that is not one number, better not higher or lower, a date not YYYY-MM-DD, a cost line that is not one number, a cost of none on a model call, or a line that is not one of the parts. Each problem is its own hold, on the line of the part it names.

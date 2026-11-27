@@ -13,7 +13,7 @@ Acme (invented company, illustrative figures). Status: ready for review.
 - **Tokens per task:** 9,000
 - **Price per token:** $0.000003
 - **The line:** model call. Line items, totals and tax stay in fixed code; only turning free-text notes into draft line items calls a model.
-- **Decides the next step:** Maya Okafor, Group Product Manager, Quoting
+- **Decides the next step:** Head of Product, Quoting squad
 
 ## How it works
 
@@ -29,7 +29,7 @@ Today 34% of quotes go out within 2 hours (illustrative, from the quoting events
 - A set of 400 real job notes from consenting pilot customers, with the line items the tradesperson finally sent as the reference.
 - Pass bar: 90% of draft line items match a sent line item, and 0 drafts include a price the price book does not hold.
 - Runs in CI on every prompt change or model change, and before each rollout stage.
-- Owner of the eval set: Tomas Reyes, Staff Engineer.
+- Owner of the eval set: Quoting squad tech lead.
 
 ## Guardrails
 
@@ -46,9 +46,9 @@ Today 34% of quotes go out within 2 hours (illustrative, from the quoting events
 
 - Trigger: draft line-item acceptance below 70% for 3 days, or any quote sent with a price outside the price book.
 - How: turn off the `quote_drafts` flag. Quoting falls back to the manual form with no data lost.
-- Who: the on-call engineer can turn it off without asking; Maya Okafor decides whether it comes back.
+- Who: the on-call engineer can turn it off without asking; Head of Product, Quoting squad decides whether it comes back.
 
 ## Open questions
 
-- Should drafts for jobs over $10,000 need a second review? Owner: Maya Okafor, answer by 2026-12-15.
+- Should drafts for jobs over $10,000 need a second review? Owner: Head of Product, Quoting squad, answer by 2026-12-15.
 - Riskiest assumption: tradespeople will send a draft after light edits. Test: the internal stage measures how many draft lines are kept, before the pilot starts.

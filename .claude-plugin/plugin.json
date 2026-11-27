@@ -1,6 +1,6 @@
 {
   "name": "spec-auditor",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Audit a PRD or spec against its landing brief and a checklist. Every check runs in code and cites its lines, and the verdict is pass or hold.",
   "author": { "name": "Dacard" }
 }

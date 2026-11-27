@@ -4,7 +4,7 @@ description: Audits a PRD, product spec or feature spec (a Linear project, a Not
 license: MIT. See LICENSE in the repository root.
 metadata:
   author: Dacard
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # Spec auditor
